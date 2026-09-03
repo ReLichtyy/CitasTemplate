@@ -62,7 +62,8 @@ No test runner is configured yet in Template.
 
 ### Template
 
-- Routing via `react-router-dom`, mounted in `src/main.tsx` (`BrowserRouter` + `AuthProvider`) with the full route tree declared in `src/App.tsx`.
+- Component architecture, folder conventions, and styling rules (Tailwind CSS): see `Template/ARCHITECTURE.md`.
+- Routing via `react-router-dom`, mounted in `src/main.tsx` (`BrowserRouter` + `AuthProvider`) with the full route tree declared in `src/App.tsx`, wrapped in a top-level `AppLayout` route (Navbar/Footer chrome) that applies to every page.
 - **Pages are organized by domain under `src/pages/`**, mirroring the backend:
   - `auth/` — `LoginPage`, `RegisterPage`.
   - `gestion/<domain>/` (`servicios`, `adicionales`, `empleados`, `horarios`, `restricciones`) — one `<Domain>ListPage` + one `<Singular>DetallePage` per domain, gated to admin/empleado.

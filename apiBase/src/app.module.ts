@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { HealthController } from './health/health.controller.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 import { SyncModule } from './sync/sync.module.js';
 import { CitasModule } from './citas/citas.module.js';
 import { EmpleadosModule } from './empleados/empleados.module.js';
@@ -20,6 +21,7 @@ import { AdicionalesModule } from './adicionales/adicionales.module.js';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+    PrismaModule,
     AuthModule,
     SyncModule,
     CitasModule,

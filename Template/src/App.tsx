@@ -24,47 +24,49 @@ import { NoAutorizadoPage } from './pages/sistema/NoAutorizadoPage';
 import { EnConstruccionPage } from './pages/sistema/EnConstruccionPage';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { RoleRoute } from './routes/RoleRoute';
-import './App.css';
+import { AppLayout } from './components/layout/AppLayout';
 
 function App() {
   return (
     <Routes>
-      {/* publico */}
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/especialidades" element={<EspecialidadesPage />} />
-      <Route path="/equipo" element={<EquipoPage />} />
+      <Route element={<AppLayout />}>
+        {/* publico */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/especialidades" element={<EspecialidadesPage />} />
+        <Route path="/equipo" element={<EquipoPage />} />
 
-      {/* auth */}
-      <Route path="/auth/login" element={<LoginPage />} />
-      <Route path="/auth/registro" element={<RegisterPage />} />
+        {/* auth */}
+        <Route path="/auth/login" element={<LoginPage />} />
+        <Route path="/auth/registro" element={<RegisterPage />} />
 
-      {/* citas: any authenticated role, scoped server-side */}
-      <Route element={<ProtectedRoute />}>
-        <Route path="/citas" element={<CitasListPage />} />
-        <Route path="/citas/agenda" element={<AgendaPage />} />
-        <Route path="/citas/reservar" element={<ReservarPage />} />
-        <Route path="/citas/:id" element={<DetalleCitaPage />} />
-        <Route path="/citas/:id/editar" element={<EditarCitaPage />} />
+        {/* citas: any authenticated role, scoped server-side */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/citas" element={<CitasListPage />} />
+          <Route path="/citas/agenda" element={<AgendaPage />} />
+          <Route path="/citas/reservar" element={<ReservarPage />} />
+          <Route path="/citas/:id" element={<DetalleCitaPage />} />
+          <Route path="/citas/:id/editar" element={<EditarCitaPage />} />
 
-        {/* gestion: admin + empleado only */}
-        <Route element={<RoleRoute allow={['admin', 'empleado']} />}>
-          <Route path="/gestion/servicios" element={<ServiciosListPage />} />
-          <Route path="/gestion/servicios/:id" element={<ServicioDetallePage />} />
-          <Route path="/gestion/adicionales" element={<AdicionalesListPage />} />
-          <Route path="/gestion/adicionales/:id" element={<AdicionalDetallePage />} />
-          <Route path="/gestion/empleados" element={<EmpleadosListPage />} />
-          <Route path="/gestion/empleados/:id" element={<EmpleadoDetallePage />} />
-          <Route path="/gestion/horarios" element={<HorariosListPage />} />
-          <Route path="/gestion/horarios/:id" element={<HorarioDetallePage />} />
-          <Route path="/gestion/restricciones" element={<RestriccionesListPage />} />
-          <Route path="/gestion/restricciones/:id" element={<RestriccionDetallePage />} />
+          {/* gestion: admin + empleado only */}
+          <Route element={<RoleRoute allow={['admin', 'empleado']} />}>
+            <Route path="/gestion/servicios" element={<ServiciosListPage />} />
+            <Route path="/gestion/servicios/:id" element={<ServicioDetallePage />} />
+            <Route path="/gestion/adicionales" element={<AdicionalesListPage />} />
+            <Route path="/gestion/adicionales/:id" element={<AdicionalDetallePage />} />
+            <Route path="/gestion/empleados" element={<EmpleadosListPage />} />
+            <Route path="/gestion/empleados/:id" element={<EmpleadoDetallePage />} />
+            <Route path="/gestion/horarios" element={<HorariosListPage />} />
+            <Route path="/gestion/horarios/:id" element={<HorarioDetallePage />} />
+            <Route path="/gestion/restricciones" element={<RestriccionesListPage />} />
+            <Route path="/gestion/restricciones/:id" element={<RestriccionDetallePage />} />
+          </Route>
         </Route>
-      </Route>
 
-      {/* sistema */}
-      <Route path="/sistema/no-autorizado" element={<NoAutorizadoPage />} />
-      <Route path="/sistema/en-construccion" element={<EnConstruccionPage />} />
-      <Route path="*" element={<NotFoundPage />} />
+        {/* sistema */}
+        <Route path="/sistema/no-autorizado" element={<NoAutorizadoPage />} />
+        <Route path="/sistema/en-construccion" element={<EnConstruccionPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
     </Routes>
   );
 }
