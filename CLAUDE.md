@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Dating app base project. Two independent npm workspaces, not yet linked by any tooling (no monorepo config, no root `package.json`):
+Generic appointment-booking (citas) base project — not tied to any specific business vertical (salon, clinic, consulting, etc.). Two independent npm workspaces, not yet linked by any tooling (no monorepo config, no root `package.json`):
 
 - `apiBase/` — NestJS backend. Owns the REST API and sync with an external API (contract not yet defined).
 - `Template/` — React + Vite frontend. Owns the public-facing app (home page first).
@@ -49,6 +49,7 @@ No test runner is configured yet in Template.
 - **Auth/roles are global and deny-by-default.** `AppModule` registers `JwtAuthGuard` and `RolesGuard` as `APP_GUARD`s, so every route requires a valid JWT unless the handler/controller is decorated `@Public()` (`src/common/decorators/public.decorator.ts`), and is open to any authenticated role unless decorated `@Roles(Role.ADMIN, ...)` (`src/common/decorators/roles.decorator.ts`, roles in `src/common/enums/role.enum.ts`). `@CurrentUser()` (`src/common/decorators/current-user.decorator.ts`) injects the decoded JWT payload into a handler. This exists specifically so no domain route can ever be accidentally left unauthenticated — always add `@Roles(...)` or `@Public()` explicitly on new controllers instead of relying on defaults you haven't checked.
 - **`AuthModule`** (`src/auth/`) has the JWT strategy (`strategies/jwt.strategy.ts`) and `POST /auth/login` (`@Public()`). `AuthService.login` currently throws `NotImplementedException` — there is no user store/persistence wired up yet; implement real credential validation there once a DB is chosen.
 - **Domain modules** (`src/citas/`, `src/empleados/`, `src/servicios/`, `src/horarios/`, `src/restricciones/`, `src/adicionales/`) all follow the same controller → service shape, each service currently a stub (`findAll` returns `[]`, everything else throws `NotImplementedException`). `citas` is the odd one out: any authenticated role can hit `GET/POST/DELETE /citas*` (the service is expected to scope results to "own" vs "all" per role internally), while `PATCH` is `Roles(ADMIN, EMPLEADO)` only. The other domains are `gestion` (catalog/resource admin): reads are `Roles(ADMIN, EMPLEADO)`, writes are `Roles(ADMIN)` only.
+- **Booking conflict detection is a required part of `CitasModule`, not later polish.** Each `Empleado` has their own calendar — creating/confirming a cita must check the target date/time against that specific employee's existing citas (via `HorariosModule`/`RestriccionesModule`) and reject it as already-taken if it overlaps. This can't be built for real until a persistence layer exists (all three modules are stubs today); when the DB is chosen, implement the overlap check server-side — the frontend `ReservarPage` confirm step must surface whatever the API returns, not simulate availability locally.
 - **`SyncModule`** (`src/sync/`) is the integration point for the external API sync:
   - `external-api.config.ts` — registers the `externalApi` config namespace from env vars (`EXTERNAL_API_BASE_URL`, `EXTERNAL_API_KEY`, `EXTERNAL_API_TIMEOUT_MS`, `EXTERNAL_API_SYNC_CRON`).
   - `external-api.client.ts` — generic authenticated HTTP client (`get`/`post`) wrapping `@nestjs/axios`, reads base URL/key from `ConfigService`.
@@ -68,7 +69,7 @@ No test runner is configured yet in Template.
   - `auth/` — `LoginPage`, `RegisterPage`.
   - `gestion/<domain>/` (`servicios`, `adicionales`, `empleados`, `horarios`, `restricciones`) — one `<Domain>ListPage` + one `<Singular>DetallePage` per domain, gated to admin/empleado.
   - `citas/` — `CitasListPage`, `AgendaPage`, `ReservarPage`, `EditarCitaPage`, `DetalleCitaPage`, gated to any authenticated role.
-  - `publico/` — `LandingPage` (the original home page, now at `/`), `EspecialidadesPage`, `EquipoPage` — ungated marketing pages.
+  - `publico/` — `LandingPage` (generic booking pitch + `/health` check), `ServiciosPage` (public service catalog — distinct from `gestion/servicios/ServiciosListPage`, which is the admin/empleado management view of the same domain), `EquipoPage` — ungated marketing pages.
   - `sistema/` — `NotFoundPage` (`*`), `NoAutorizadoPage`, `EnConstruccionPage`.
   - All page components are currently placeholder shells (heading only) except `LandingPage`, which does the real `/health` check — flesh out a page's real UI/logic in place, don't rename it.
 - **`src/routes/ProtectedRoute.tsx`** redirects to `/auth/login` when not authenticated; **`src/routes/RoleRoute.tsx`** takes an `allow: Role[]` prop and redirects to `/sistema/no-autorizado` otherwise. Both are `react-router` layout routes (`<Route element={...}><Route .../></Route>`) — nest new gated routes under them in `App.tsx` rather than checking auth inside a page component.

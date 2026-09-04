@@ -54,6 +54,12 @@ Navbar publico (siempre visible, sin gate): **Inicio** (`/`), **Servicios** (`/s
 
 `pages/publico/ServiciosPage.tsx` es el catalogo publico de servicios (para cualquier visitante). Es una pagina distinta de `pages/gestion/servicios/ServiciosListPage.tsx`, que es la vista de administracion (alta/edicion, solo admin/empleado). No fusionar ambas — sirven audiencias y permisos distintos aunque el dominio de datos sea el mismo.
 
+## Flujo de Reservar (pendiente de backend)
+
+`ReservarPage` (form -> confirmacion) tiene que validar disponibilidad real antes de confirmar una cita: cada Empleado tiene su propio calendario, y la fecha/hora elegida puede estar ya tomada para ese empleado puntual. Esa validacion es responsabilidad del backend (`CitasModule` + `HorariosModule`/`RestriccionesModule`, ver CLAUDE.md raiz) — hoy son stubs, asi que no hay endpoint real que la resuelva todavia.
+
+No simular esta logica en el frontend (ni con mocks locales de "horarios ocupados"). Cuando el backend tenga el chequeo de solapamiento implementado, el paso de confirmacion de `ReservarPage` debe mostrar el error que devuelva la API (ej. 409 "horario ya tomado") en vez de inventar disponibilidad del lado del cliente.
+
 ## Pendiente (no cubierto en este pass)
 
 - **Tipos de dominio reales** (`Cita`, `Empleado`, `Servicio`, etc.) — hoy los services devuelven `unknown`/`any` porque el contrato de API no esta definido. Los tipos usados en `ServiciosListPage`/`ServicioDetallePage` (`ServicioListItem`, `ServicioDetail`) son placeholders de forma, no el contrato real.
