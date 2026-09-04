@@ -17,11 +17,17 @@ export function Navbar() {
         </NavLink>
 
         <div className="flex flex-1 items-center gap-6">
-          <NavLink to="/especialidades" className={linkClass}>
-            Especialidades
+          <NavLink to="/" end className={linkClass}>
+            Inicio
+          </NavLink>
+          <NavLink to="/servicios" className={linkClass}>
+            Servicios
           </NavLink>
           <NavLink to="/equipo" className={linkClass}>
             Equipo
+          </NavLink>
+          <NavLink to="/citas/reservar" className={linkClass}>
+            Reservar
           </NavLink>
           {isAuthenticated && (
             <NavLink to="/citas" className={linkClass}>

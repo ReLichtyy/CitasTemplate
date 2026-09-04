@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiClient } from '../../api/client';
-import { Button } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/Spinner';
 
 type HealthResponse = { status: string; timestamp: string };
@@ -18,9 +18,14 @@ export function LandingPage() {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
       <section className="flex flex-col items-center gap-2">
-        <h1 className="text-4xl">Encuentra tu match</h1>
-        <p className="text-text">Conecta con personas afines a ti.</p>
-        <Button className="mt-4">Empezar</Button>
+        <h1 className="text-4xl">Reserva tu cita en minutos</h1>
+        <p className="text-text">Elegi un servicio, un horario, y listo.</p>
+        <Link
+          to="/citas/reservar"
+          className="mt-4 inline-flex items-center justify-center rounded-full bg-accent px-6 py-3 text-sm font-medium text-white no-underline transition-colors hover:opacity-90"
+        >
+          Reservar ahora
+        </Link>
       </section>
 
       <p className="text-sm text-text">

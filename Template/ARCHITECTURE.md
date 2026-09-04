@@ -46,6 +46,14 @@ Las 18 paginas restantes siguen siendo placeholders (`<h1>Titulo</h1>`) — ya h
 
 Componentes/paginas nunca llaman `fetch` ni `apiClient` directo — siempre a traves de `services/<dominio>Service.ts`. Esto no cambio con este spec, se reitera porque es la regla que hace que swap de backend/contrato sea un cambio de un solo archivo por dominio.
 
+## Alcance del template
+
+Este frontend es generico a cualquier negocio de citas/reservas (salon, clinica, consultoria, etc.), no a un servicio en especifico. No hardcodear copy ni secciones atadas a un rubro puntual — el Home, el navbar y las paginas publicas deben funcionar igual sin importar que tipo de "servicio" se agende.
+
+Navbar publico (siempre visible, sin gate): **Inicio** (`/`), **Servicios** (`/servicios`), **Equipo** (`/equipo`), **Reservar** (`/citas/reservar`). `Reservar` cuelga de `ProtectedRoute`, asi que a un invitado lo manda a `/auth/login` — es el comportamiento esperado, no un bug.
+
+`pages/publico/ServiciosPage.tsx` es el catalogo publico de servicios (para cualquier visitante). Es una pagina distinta de `pages/gestion/servicios/ServiciosListPage.tsx`, que es la vista de administracion (alta/edicion, solo admin/empleado). No fusionar ambas — sirven audiencias y permisos distintos aunque el dominio de datos sea el mismo.
+
 ## Pendiente (no cubierto en este pass)
 
 - **Tipos de dominio reales** (`Cita`, `Empleado`, `Servicio`, etc.) — hoy los services devuelven `unknown`/`any` porque el contrato de API no esta definido. Los tipos usados en `ServiciosListPage`/`ServicioDetallePage` (`ServicioListItem`, `ServicioDetail`) son placeholders de forma, no el contrato real.

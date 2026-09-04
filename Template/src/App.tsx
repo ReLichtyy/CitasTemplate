@@ -1,6 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { LandingPage } from './pages/publico/LandingPage';
-import { EspecialidadesPage } from './pages/publico/EspecialidadesPage';
+import { ServiciosPage } from './pages/publico/ServiciosPage';
 import { EquipoPage } from './pages/publico/EquipoPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
@@ -32,7 +32,7 @@ function App() {
       <Route element={<AppLayout />}>
         {/* publico */}
         <Route path="/" element={<LandingPage />} />
-        <Route path="/especialidades" element={<EspecialidadesPage />} />
+        <Route path="/servicios" element={<ServiciosPage />} />
         <Route path="/equipo" element={<EquipoPage />} />
 
         {/* auth */}
