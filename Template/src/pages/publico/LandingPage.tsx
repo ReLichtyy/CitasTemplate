@@ -5,7 +5,7 @@ import { configuracionPlaceholder } from '../../lib/configuracionPlaceholder';
 // ConfiguracionNegocio y no tiene por que ser configurable.
 const BAJADA = 'Elegi un horario y confirma al instante.';
 
-// spec/06: si el negocio no cargo eslogan, el h1 cae a un titular neutro de rubro.
+// 06-hero-landing.md: si el negocio no cargo eslogan, el h1 cae a un titular neutro de rubro.
 const TITULAR_NEUTRO = 'Reserva tu cita en minutos';
 
 export function LandingPage() {

@@ -34,16 +34,20 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/servicios" element={<ServiciosPage />} />
         <Route path="/equipo" element={<EquipoPage />} />
+        {/* Reservar es publico: se agenda como invitado dando el telefono. La cita se
+            crea igual en el servidor, que sigue siendo quien decide de quien es. */}
+        <Route path="/citas/reservar" element={<ReservarPage />} />
 
         {/* auth */}
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/auth/registro" element={<RegisterPage />} />
 
-        {/* citas: any authenticated role, scoped server-side */}
-        <Route element={<ProtectedRoute />}>
+        {/* citas propias: cualquier rol con sesion, acotadas en el servidor. Un
+            invitado no tiene citas que ver, asi que va a la pagina de sin acceso y no
+            al login. */}
+        <Route element={<ProtectedRoute redirigirA="/sistema/no-autorizado" />}>
           <Route path="/citas" element={<CitasListPage />} />
           <Route path="/citas/agenda" element={<AgendaPage />} />
-          <Route path="/citas/reservar" element={<ReservarPage />} />
           <Route path="/citas/:id" element={<DetalleCitaPage />} />
           <Route path="/citas/:id/editar" element={<EditarCitaPage />} />
 

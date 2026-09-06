@@ -2,23 +2,26 @@
 
 Specs cortos, uno por componente. Cada archivo se lee solo cuando se toca ese componente.
 
-| # | Archivo | Cubre |
+| # | Spec | Vive junto a |
 |---|---|---|
-| 01 | `01-modelo-datos.md` | Entidades e invariantes. Fuente de verdad: `apiBase/prisma/schema.prisma` |
-| 02 | `02-reservas-concurrencia.md` | Disponibilidad, traslape, carrera de reserva, importes |
-| 03 | `03-autorizacion.md` | Roles, propiedad, identidad, secretos |
-| 04 | `04-contrato-api.md` | Sobre de respuesta y errores |
-| 05 | `05-marca-y-responsive.md` | Qué hace al producto genérico, paleta y reglas de adaptabilidad |
-| 06 | `06-hero-landing.md` | Hero de la landing: logo y los dos botones |
-| 07 | `07-card-servicio.md` | Card de servicio: contenido, rejilla y formato de precio |
-| 08 | `08-pagina-especialistas.md` | Página `/equipo`: secciones, card de especialista y detalles |
+| 01 | `apiBase/prisma/01-modelo-datos.md` | `schema.prisma` |
+| 02 | `apiBase/src/citas/02-reservas-concurrencia.md` | `citas.service.ts` |
+| 03 | `apiBase/src/auth/03-autorizacion.md` | `auth.service.ts`, guards de `common/` |
+| 04 | `apiBase/src/common/04-contrato-api.md` | interceptor y filtro de errores |
+| 05 | `Template/src/05-marca-y-responsive.md` | `index.css` y sus tokens |
+| 06 | `Template/src/pages/publico/06-hero-landing.md` | `LandingPage.tsx` |
+| 07 | `Template/src/components/ui/07-card-servicio.md` | `ServicioCard.tsx` |
+| 08 | `Template/src/pages/publico/08-pagina-especialistas.md` | `EquipoPage.tsx` |
+
+Cada spec vive en la carpeta del código que describe: abrir el módulo es encontrarlo. Este
+archivo es el único índice, y lo que un agente debe leer primero.
 
 Complementan, no reemplazan: `CLAUDE.md` (raíz) y `Template/ARCHITECTURE.md`.
 
 ## Decisiones cerradas
 
 **Producto genérico, sin rubro.** Ninguna entidad, copy ni componente nombra un tipo de
-negocio. El rubro se expresa como datos. Ver `05`.
+negocio. El rubro se expresa como datos. Ver `05-marca-y-responsive.md`.
 
 **Un despliegue por negocio.** Una base de datos por negocio. Ninguna tabla lleva
 `negocioId`. La identidad del negocio vive en `ConfiguracionNegocio`, tabla de una sola fila.
@@ -28,11 +31,18 @@ extensión — decidido con eso sabido.
 **Identidad del cliente: teléfono.** `Usuario.telefono` es único y obligatorio; el email es
 opcional. El login es por teléfono, no por email. Consecuencia asumida: el teléfono es
 más volátil que el email como credencial (cambio de número = soporte manual) y no está
-verificado. Ver `03`.
+verificado. Ver `03-autorizacion.md`.
 
 **MariaDB / MySQL vía Prisma.** Heredado del sistema anterior. Su consecuencia obligatoria:
 sin índices parciales ni restricciones de exclusión, la concurrencia se resuelve en la capa
-de aplicación. Ver `02`.
+de aplicación. Ver `02-reservas-concurrencia.md`.
+
+**Se reserva sin sesión.** Reservar es la única escritura abierta a un invitado: pide
+teléfono y nombre, y la cita cuelga de la ficha de ese teléfono o crea una nueva sin
+contraseña. Exigir cuenta antes de agendar pierde justamente a quien viene a agendar.
+Consecuencia asumida y no mitigada: mientras el número no se verifique, se puede reservar a
+nombre de un teléfono ajeno. El resto de `/citas` sigue cerrado, y un invitado que lo abra
+va a la página de sin acceso. Ver `03-autorizacion.md`.
 
 **Cliente-servidor: el navegador nunca es la autoridad.** React resuelve presentación y
 adaptabilidad. Toda regla que importe —precio, disponibilidad, propiedad, permisos— se
@@ -40,14 +50,18 @@ decide y se aplica en el servidor. El frontend muestra lo que el API responde; n
 
 ## Orden de implementación
 
-1. Esquema y migración inicial + semilla de catálogos (`01`).
-2. Login real por teléfono con bcrypt, y `JWT_SECRET` sin fallback (`03`).
-3. Sobre de respuesta y filtro de errores (`04`) — antes de las pantallas, porque define
+1. Esquema y migración inicial + semilla de catálogos (`01-modelo-datos.md`). Falta además
+   instalar y cablear un driver adapter (`@prisma/adapter-mariadb`): sin él Prisma 7 no
+   construye el cliente y el API no arranca. Mientras tanto, `DATOS_QUEMADOS=true` sirve un
+   catálogo en memoria desde `apiBase/src/demo/` — andamiaje que se borra en este paso.
+2. Login real por teléfono con bcrypt, y `JWT_SECRET` sin fallback (`03-autorizacion.md`).
+3. Sobre de respuesta y filtro de errores (`04-contrato-api.md`) — antes de las pantallas, porque define
    qué puede mostrar el frontend.
-4. Guard de propiedad (`03`).
-5. Reserva con transacción, y el resto de `CitasService` (`02`).
-6. Configuración de negocio, paleta nueva y pasada responsive (`05`).
-7. `ButtonLink`, `ProtectedRoute` con destino de retorno, y hero (`06`).
+4. Guard de propiedad (`03-autorizacion.md`).
+5. Reserva con transacción, y el resto de `CitasService` (`02-reservas-concurrencia.md`).
+6. Configuración de negocio, paleta nueva y pasada responsive (`05-marca-y-responsive.md`).
+7. `ButtonLink` y hero (`06-hero-landing.md`). El destino de retorno de `ProtectedRoute` ya
+   no bloquea el hero —reservar no pide sesión— y se cierra con el login del paso 2.
 8. Endpoints públicos de catálogo, `ServicioCard` y `EspecialistaCard`, las páginas de
    detalle público `/servicios/:id` y `/equipo/:id`, y la página de Especialistas
-   (`07`, `08`).
+   (`07-card-servicio.md`, `08-pagina-especialistas.md`).

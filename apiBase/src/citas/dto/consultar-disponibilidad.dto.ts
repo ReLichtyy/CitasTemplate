@@ -2,7 +2,7 @@ import { IsISO8601, IsUUID } from 'class-validator';
 
 /**
  * Query de GET /citas/disponibilidad. El frontend pregunta al API en vez de
- * simular horarios: la disponibilidad la decide el servidor. Ver spec/02.
+ * simular horarios: la disponibilidad la decide el servidor. Ver 02-reservas-concurrencia.md.
  */
 export class ConsultarDisponibilidadDto {
   @IsUUID(undefined, { message: 'El profesional indicado no es valido.' })

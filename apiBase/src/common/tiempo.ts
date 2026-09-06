@@ -1,7 +1,7 @@
 /**
  * Aritmetica de tiempo compartida por disponibilidad y agenda.
  *
- * Dos representaciones conviven a proposito (ver spec/01):
+ * Dos representaciones conviven a proposito (ver 01-modelo-datos.md):
  *   - HorarioAtencion guarda minutos desde medianoche (0..1439), sin zona.
  *   - Cita y RestriccionHorario guardan instantes absolutos (DateTime).
  *
@@ -112,7 +112,7 @@ export function instanteDesdeZona(
 /**
  * Traslape de dos intervalos semiabiertos [inicio, fin).
  * Los extremos que se tocan no traslapan: una cita que termina 10:00 y otra que
- * empieza 10:00 conviven. Ver spec/02.
+ * empieza 10:00 conviven. Ver 02-reservas-concurrencia.md.
  */
 export function seTraslapan(
   inicioA: Date,

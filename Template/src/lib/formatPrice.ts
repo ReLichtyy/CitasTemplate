@@ -15,7 +15,7 @@ function getFormatter(moneda: string, locale: string): Intl.NumberFormat {
 
 // Servicio.precio viaja como cadena (Decimal en la base). Intl.NumberFormat acepta un
 // valor numerico string directamente y preserva su precision exacta; convertirlo con
-// Number() primero introduce error de redondeo en importes grandes. Ver spec/07.
+// Number() primero introduce error de redondeo en importes grandes. Ver 07-card-servicio.md.
 export function formatPrice(precio: string, moneda: string, locale: string): string {
   return getFormatter(moneda, locale).format(precio as unknown as number);
 }

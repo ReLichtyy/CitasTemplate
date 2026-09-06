@@ -37,7 +37,7 @@ import { AdicionalesModule } from './adicionales/adicionales.module.js';
     AppService,
     // Every route requires a valid JWT and passes role checks by default.
     // Opt out with @Public(), scope with @Roles(...), and declare ownership with
-    // @PropiedadCita() — rol y propiedad son cosas distintas. Ver spec/03.
+    // @PropiedadCita() — rol y propiedad son cosas distintas. Ver 03-autorizacion.md.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: PropiedadCitaGuard },

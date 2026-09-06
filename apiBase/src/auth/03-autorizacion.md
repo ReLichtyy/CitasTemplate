@@ -34,7 +34,7 @@ ninguna queda sin declarar autenticación.
 | Listado completo de citas y agenda diaria | `ADMIN`, `EMPLEADO` |
 | Detalle y cancelación de una cita | Los tres roles, solo la propia |
 | Edición y cambio de estado | `ADMIN`, `EMPLEADO`, solo la propia |
-| Crear cita | Cualquier rol autenticado (`CLIENTE` solo para sí mismo) |
+| Crear cita | **Con o sin sesión.** Con token el cliente sale del token, y un `CLIENTE` solo reserva para sí mismo; sin token hay que mandar `cliente` con teléfono y nombre |
 | Lectura de catálogos internos | `ADMIN`, `EMPLEADO` |
 | Mantenimiento de servicios, adicionales, empleados, horarios, restricciones | `ADMIN` |
 | Configuración del negocio y usuarios | `ADMIN` |
@@ -43,6 +43,35 @@ Pendiente de cerrar contra el código: `GET /servicios` y `GET /empleados` son h
 `@Roles(ADMIN, EMPLEADO)`, pero `ServiciosPage` y `EquipoPage` son públicas y necesitan ese
 catálogo. Se resuelve con rutas públicas de solo lectura que devuelvan **únicamente** los
 registros activos y sin campos internos — no abriendo las de gestión.
+
+## Reserva sin sesión
+
+Reservar es la única escritura abierta a un invitado, y es deliberado: es el CTA central del
+producto y exigir cuenta antes de agendar pierde justamente a quien viene a agendar.
+
+`POST /citas` se declara `@AuthOpcional()`, **no** `@Public()`. La diferencia importa:
+`@Public()` corta el guard de raíz, así que un cliente con sesión se atendería como invitado
+y la cita se colgaría del usuario equivocado. Con auth opcional, si viene un token válido el
+usuario queda en `@CurrentUser()`, y si no viene, la petición sigue como invitado.
+
+Sin token, el cuerpo trae `cliente` con teléfono y nombre. El teléfono es la identidad
+(decisión cerrada en `SPEC.md`), así que el servicio busca por teléfono normalizado: si ya
+existe una ficha, la cita cuelga de ella; si no, se crea una **sin contraseña** —
+`Usuario.password` es opcional por esto, y el login rechaza a quien no la tiene.
+
+Dos consecuencias que se asumen con los ojos abiertos:
+
+- Una ficha existente **no se reescribe** con los datos que mande el invitado. Nadie le
+  cambia el nombre ni el correo a un cliente registrado escribiendo su número.
+- **Reservar a nombre de un teléfono ajeno es posible.** Sin verificación del número no hay
+  forma de impedirlo. Lo que sí se impide es que la respuesta lo revele: al invitado se le
+  devuelve un comprobante sin `cliente` ni `registradaPor`, porque devolver la ficha
+  convertiría la reserva en una consulta de datos ajenos. Si algún día se agrega
+  verificación por SMS, es aquí donde entra.
+
+`/citas` y el resto de las rutas de citas **no** se abren: un invitado no tiene citas que
+ver. El frontend lo manda a la página de sin acceso, no al login, porque entrar no le
+resolvería nada.
 
 ## Identidad y credenciales
 
@@ -105,8 +134,8 @@ Se unifica en mayúsculas, tomando el esquema como fuente:
 - `Template/src/services/authService.ts` → `type Role = 'ADMIN' | 'EMPLEADO' | 'CLIENTE'`.
 - `App.tsx` → `allow={['ADMIN', 'EMPLEADO']}`.
 - El rol guardado en `localStorage` de sesiones viejas queda inválido; el manejo de 401 de
-  `04` lo resuelve cerrando sesión.
+  el manejo de 401 lo resuelve cerrando sesión.
 
 En el mismo paso se renombra la propiedad `role` a `rol` en `JwtPayload` y
-`AuthenticatedUser`, que es lo que `04` exige: los nombres no se traducen entre capas. `sub`
+`AuthenticatedUser`: los nombres no se traducen entre capas. `sub`
 se queda como está, que es la claim estándar de JWT.

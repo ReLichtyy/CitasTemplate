@@ -1,6 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { PropiedadCita } from '../common/decorators/propiedad.decorator.js';
+import { AuthOpcional, Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Role } from '../common/enums/role.enum.js';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface.js';
@@ -11,7 +21,7 @@ import { ConsultarDisponibilidadDto } from './dto/consultar-disponibilidad.dto.j
 import { ReservarCitaDto } from './dto/reservar-cita.dto.js';
 
 // Ninguna ruta de citas queda sin declarar rol y propiedad, igual que ninguna queda
-// sin declarar autenticacion. Ver spec/03.
+// sin declarar autenticacion. Ver 03-autorizacion.md.
 @Controller('citas')
 export class CitasController {
   constructor(private readonly service: CitasService) {}
@@ -23,7 +33,9 @@ export class CitasController {
     return this.service.findAll(user);
   }
 
+  // Publica porque un invitado tiene que ver horarios antes de decidir si reserva.
   // Antes de @Get(':id'), o 'disponibilidad' se leeria como un id.
+  @Public()
   @Get('disponibilidad')
   disponibilidad(@Query() query: ConsultarDisponibilidadDto) {
     return this.service.disponibilidad(query);
@@ -35,10 +47,15 @@ export class CitasController {
     return this.service.findOne(id, user);
   }
 
-  // Cualquier rol autenticado; un CLIENTE solo puede reservar para si mismo, y de
-  // eso se encarga CitasService al resolver el cliente. Ver spec/02.
+  // Se reserva con o sin sesion. Sin ella hay que mandar `cliente` con el telefono,
+  // que es la identidad del cliente; con ella el cliente sale del token y un CLIENTE
+  // solo puede reservar para si mismo. Lo resuelve CitasService, no el guard.
+  @AuthOpcional()
   @Post()
-  reservar(@Body() dto: ReservarCitaDto, @CurrentUser() user: AuthenticatedUser) {
+  reservar(
+    @Body() dto: ReservarCitaDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
     return this.service.reservar(dto, user);
   }
 
@@ -53,7 +70,7 @@ export class CitasController {
     return this.service.update(id, dto, user);
   }
 
-  // No borra la fila: pasa la cita a CANCELADA y libera el espacio. Ver spec/02.
+  // No borra la fila: pasa la cita a CANCELADA y libera el espacio. Ver 02-reservas-concurrencia.md.
   @PropiedadCita()
   @Delete(':id')
   cancelar(

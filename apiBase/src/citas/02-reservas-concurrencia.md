@@ -68,4 +68,4 @@ es el que responde el API.
 Nada de lo anterior. `ReservarPage` no simula disponibilidad ni con mocks locales: pide
 horarios al API, y en el paso de confirmación muestra el error que el API devuelva
 (traslape → 409). El texto que ve el usuario sale del `message` del sobre de respuesta, no
-de una cadena inventada en el cliente. Ver `04`.
+de una cadena inventada en el cliente.

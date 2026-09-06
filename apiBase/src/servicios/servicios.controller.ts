@@ -1,20 +1,31 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
+import { Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { Role } from '../common/enums/role.enum.js';
 import { ServiciosService } from './servicios.service.js';
 
-// TODO: refine per-role read access once business rules for servicios are written.
+// Las lecturas son catalogo publico: ServiciosPage y la reserva de invitado lo
+// necesitan sin sesion. Devuelven solo registros activos y solo campos publicos, que
+// es lo que permite abrirlas sin abrir la gestion. Ver 03-autorizacion.md.
 @Controller('servicios')
 export class ServiciosController {
   constructor(private readonly service: ServiciosService) {}
 
-  @Roles(Role.ADMIN, Role.EMPLEADO)
+  @Public()
   @Get()
   findAll() {
     return this.service.findAll();
   }
 
-  @Roles(Role.ADMIN, Role.EMPLEADO)
+  @Public()
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);

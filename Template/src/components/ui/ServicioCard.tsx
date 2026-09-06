@@ -20,7 +20,7 @@ export function ServicioCard({ servicio, moneda, locale, onSelect }: ServicioCar
     <button type="button" onClick={onSelect} className={CARD_INTERACTIVE_CLASSES}>
       <div className="flex items-start gap-3 sm:gap-4">
         {/* Sin imagenUrl cae al monograma del nombre, asi todas las cards miden igual y la
-            rejilla no se rompe (la objecion de spec/07 a poner foto en el catalogo). */}
+            rejilla no se rompe (la objecion de 07-card-servicio.md a poner foto en el catalogo). */}
         <Thumbnail
           src={imagenUrl}
           fallback={nombre.charAt(0).toUpperCase()}

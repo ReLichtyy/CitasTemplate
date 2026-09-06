@@ -10,7 +10,7 @@ const f = (iso: string) => new Date(iso);
 
 describe('seTraslapan', () => {
   it('no traslapa cuando los extremos solo se tocan', () => {
-    // Una cita que termina 10:00 y otra que empieza 10:00 conviven. Ver spec/02.
+    // Una cita que termina 10:00 y otra que empieza 10:00 conviven. Ver 02-reservas-concurrencia.md.
     expect(
       seTraslapan(
         f('2026-09-07T09:00:00Z'),

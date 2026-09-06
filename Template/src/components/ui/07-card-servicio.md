@@ -41,7 +41,7 @@ baile entre filas.
 
 El chevron vive en su propia columna al borde derecho, centrado sobre el alto de la card. El
 precio se alinea al borde del **contenido**, no al de la card, así que los dos conviven en el
-lado derecho sin tocarse. Regla y motivo en `05`.
+lado derecho sin tocarse.
 
 Jerarquía: el precio es el elemento de mayor peso visual —tamaño y negrita, más
 `--color-price`—, por encima del nombre. La duración es el dato más callado, en
@@ -93,10 +93,10 @@ Otro helper puro de `lib/`, porque el flujo de reserva lo va a necesitar igual.
 
 La misma card en los dos lugares —por eso es un componente compartido y no código de página:
 
-- **`/equipo`**, en la sección de servicios que va debajo de los especialistas. Ver `08`.
+- **`/equipo`**, en la sección de servicios que va debajo de los especialistas. Ver `08-pagina-especialistas.md`.
 - **`/servicios`**, el catálogo completo del negocio, que sigue colgando del navbar.
 
-Ambas rutas son públicas, así que dependen del endpoint público de solo lectura que `03`
+Ambas rutas son públicas, así que dependen del endpoint público de solo lectura que
 define: devuelve únicamente los `activo` y sin campos internos.
 
 ## Estados

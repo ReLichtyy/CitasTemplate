@@ -97,8 +97,20 @@ function crearPrisma() {
   const tx = {
     servicio: { findUnique: vi.fn().mockResolvedValue(SERVICIO) },
     empleado: { findUnique: vi.fn().mockResolvedValue(EMPLEADO) },
-    usuario: { findUnique: vi.fn().mockResolvedValue({ id: 'usr-cli', activo: true }) },
-    configuracionNegocio: { findUnique: vi.fn().mockResolvedValue({ zonaHoraria: 'UTC' }) },
+    usuario: {
+      // Por id siempre existe; por telefono, no, que es el caso del invitado nuevo.
+      findUnique: vi.fn(
+        async ({ where }: { where: { id?: string; telefono?: string } }) =>
+          where.id ? { id: where.id, activo: true } : null,
+      ),
+      create: vi.fn(async ({ data }: { data: object }) => ({
+        id: 'usr-nuevo',
+        ...data,
+      })),
+    },
+    configuracionNegocio: {
+      findUnique: vi.fn().mockResolvedValue({ zonaHoraria: 'UTC' }),
+    },
     horarioAtencion: { findMany: vi.fn().mockResolvedValue([FRANJA_LUNES]) },
     restriccionHorario: {
       findFirst: vi.fn().mockResolvedValue(null),
@@ -106,14 +118,31 @@ function crearPrisma() {
     },
     servicioAdicional: { findMany: vi.fn().mockResolvedValue([]) },
     estadoCita: {
-      findUnique: vi.fn(async ({ where }: { where: { codigo: string } }) => ESTADOS[where.codigo]),
+      findUnique: vi.fn(
+        async ({ where }: { where: { codigo: string } }) =>
+          ESTADOS[where.codigo],
+      ),
     },
     cita: {
       findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
-      create: vi.fn(async ({ data }: { data: object }) => ({ id: 'cita-1', ...data })),
-      update: vi.fn(async ({ data }: { data: object }) => ({ id: 'cita-1', ...data })),
+      // Devuelve tambien lo que traeria el `include`, que es lo que lee el
+      // comprobante de invitado.
+      create: vi.fn(async ({ data }: { data: object }) => ({
+        id: 'cita-1',
+        ...data,
+        estado: PENDIENTE,
+        servicio: SERVICIO,
+        empleado: {
+          id: 'emp-1',
+          usuario: { nombre: 'Ana', apellido: 'Rojas' },
+        },
+      })),
+      update: vi.fn(async ({ data }: { data: object }) => ({
+        id: 'cita-1',
+        ...data,
+      })),
     },
   };
 
@@ -133,7 +162,7 @@ describe('CitasService.reservar', () => {
 
     const { data } = tx.cita.create.mock.calls[0][0];
     expect(data.fin.toISOString()).toBe('2026-09-07T11:00:00.000Z');
-    // El estado inicial bloquea, asi que slotOcupado es espejo de inicio. Ver spec/02.
+    // El estado inicial bloquea, asi que slotOcupado es espejo de inicio. Ver 02-reservas-concurrencia.md.
     expect(data.slotOcupado).toEqual(data.inicio);
     expect(data.estadoId).toBe(PENDIENTE.id);
   });
@@ -145,7 +174,10 @@ describe('CitasService.reservar', () => {
       { id: 'ad-2', precio: new Prisma.Decimal('4.50'), activo: true },
     ]);
 
-    await new CitasService(prisma).reservar({ ...dtoBase, adicionalIds: ['ad-1', 'ad-2'] }, CLIENTE);
+    await new CitasService(prisma).reservar(
+      { ...dtoBase, adicionalIds: ['ad-1', 'ad-2'] },
+      CLIENTE,
+    );
 
     const { data } = tx.cita.create.mock.calls[0][0];
     expect(data.precioServicio.toString()).toBe('50');
@@ -161,7 +193,10 @@ describe('CitasService.reservar', () => {
 
     // 17:30 + 60 min = 18:30, pasado el cierre.
     await expect(
-      servicio.reservar({ ...dtoBase, inicio: '2026-09-07T17:30:00.000Z' }, CLIENTE),
+      servicio.reservar(
+        { ...dtoBase, inicio: '2026-09-07T17:30:00.000Z' },
+        CLIENTE,
+      ),
     ).rejects.toThrow('fuera del horario de atencion');
   });
 
@@ -169,18 +204,18 @@ describe('CitasService.reservar', () => {
     const { prisma, tx } = crearPrisma();
     tx.horarioAtencion.findMany.mockResolvedValue([]);
 
-    await expect(new CitasService(prisma).reservar(dtoBase, CLIENTE)).rejects.toThrow(
-      'no atiende ese dia',
-    );
+    await expect(
+      new CitasService(prisma).reservar(dtoBase, CLIENTE),
+    ).rejects.toThrow('no atiende ese dia');
   });
 
   it('rechaza el traslape con otra cita del mismo empleado', async () => {
     const { prisma, tx } = crearPrisma();
     tx.cita.findFirst.mockResolvedValue({ id: 'cita-existente' });
 
-    await expect(new CitasService(prisma).reservar(dtoBase, CLIENTE)).rejects.toThrow(
-      'Ese horario ya esta tomado',
-    );
+    await expect(
+      new CitasService(prisma).reservar(dtoBase, CLIENTE),
+    ).rejects.toThrow('Ese horario ya esta tomado');
 
     // Solo cuentan los estados que bloquean disponibilidad, y solo ese empleado.
     expect(tx.cita.findFirst.mock.calls[0][0].where).toMatchObject({
@@ -193,9 +228,9 @@ describe('CitasService.reservar', () => {
     const { prisma, tx } = crearPrisma();
     tx.restriccionHorario.findFirst.mockResolvedValue({ id: 'res-1' });
 
-    await expect(new CitasService(prisma).reservar(dtoBase, CLIENTE)).rejects.toThrow(
-      'bloqueado en la agenda',
-    );
+    await expect(
+      new CitasService(prisma).reservar(dtoBase, CLIENTE),
+    ).rejects.toThrow('bloqueado en la agenda');
 
     // Cuenta la restriccion general (empleadoId nulo) tanto como la del empleado.
     expect(tx.restriccionHorario.findFirst.mock.calls[0][0].where.OR).toEqual([
@@ -206,11 +241,14 @@ describe('CitasService.reservar', () => {
 
   it('rechaza un servicio que ese empleado no realiza', async () => {
     const { prisma, tx } = crearPrisma();
-    tx.servicio.findUnique.mockResolvedValue({ ...SERVICIO, empleados: [{ id: 'emp-otro' }] });
+    tx.servicio.findUnique.mockResolvedValue({
+      ...SERVICIO,
+      empleados: [{ id: 'emp-otro' }],
+    });
 
-    await expect(new CitasService(prisma).reservar(dtoBase, CLIENTE)).rejects.toThrow(
-      'no realiza ese servicio',
-    );
+    await expect(
+      new CitasService(prisma).reservar(dtoBase, CLIENTE),
+    ).rejects.toThrow('no realiza ese servicio');
   });
 
   it('traduce la violacion de unicidad al mismo error que un traslape', async () => {
@@ -232,7 +270,10 @@ describe('CitasService.reservar', () => {
   it('ignora el clienteId que manda un CLIENTE y reserva a su nombre', async () => {
     const { prisma, tx } = crearPrisma();
 
-    await new CitasService(prisma).reservar({ ...dtoBase, clienteId: 'usr-ajeno' }, CLIENTE);
+    await new CitasService(prisma).reservar(
+      { ...dtoBase, clienteId: 'usr-ajeno' },
+      CLIENTE,
+    );
 
     const { data } = tx.cita.create.mock.calls[0][0];
     expect(data.clienteId).toBe(CLIENTE.userId);
@@ -242,11 +283,83 @@ describe('CitasService.reservar', () => {
   it('deja que el personal reserve a nombre de otro sin perder quien digito', async () => {
     const { prisma, tx } = crearPrisma();
 
-    await new CitasService(prisma).reservar({ ...dtoBase, clienteId: 'usr-cli' }, ADMIN);
+    await new CitasService(prisma).reservar(
+      { ...dtoBase, clienteId: 'usr-cli' },
+      ADMIN,
+    );
 
     const { data } = tx.cita.create.mock.calls[0][0];
     expect(data.clienteId).toBe('usr-cli');
     expect(data.registradaPorId).toBe(ADMIN.userId);
+  });
+});
+
+describe('CitasService.reservar sin sesion', () => {
+  const datosInvitado = {
+    cliente: { telefono: '+506 8888-8888', nombre: 'Ana', apellido: 'Rojas' },
+  };
+
+  it('exige los datos de contacto cuando no hay token', async () => {
+    const { prisma } = crearPrisma();
+
+    await expect(new CitasService(prisma).reservar(dtoBase)).rejects.toThrow(
+      'datos de contacto',
+    );
+  });
+
+  it('crea la ficha del invitado con el telefono normalizado y sin contrasena', async () => {
+    const { prisma, tx } = crearPrisma();
+
+    await new CitasService(prisma).reservar({ ...dtoBase, ...datosInvitado });
+
+    const { data } = tx.usuario.create.mock.calls[0][0];
+    // Sin normalizar, el mismo numero escrito de otra forma crearia un cliente nuevo.
+    expect(data.telefono).toBe('+50688888888');
+    expect(data.nombre).toBe('Ana');
+    expect(data.password).toBeUndefined();
+
+    // El invitado se registra a si mismo: no hay nadie mas que digite.
+    const cita = tx.cita.create.mock.calls[0][0].data;
+    expect(cita.clienteId).toBe('usr-nuevo');
+    expect(cita.registradaPorId).toBe('usr-nuevo');
+  });
+
+  it('cuelga la cita de la ficha existente sin reescribirla', async () => {
+    const { prisma, tx } = crearPrisma();
+    tx.usuario.findUnique.mockImplementation(
+      async ({ where }: { where: { id?: string; telefono?: string } }) =>
+        where.telefono
+          ? { id: 'usr-registrado', activo: true }
+          : { id: where.id, activo: true },
+    );
+
+    await new CitasService(prisma).reservar({ ...dtoBase, ...datosInvitado });
+
+    expect(tx.usuario.create).not.toHaveBeenCalled();
+    expect(tx.cita.create.mock.calls[0][0].data.clienteId).toBe(
+      'usr-registrado',
+    );
+  });
+
+  it('no devuelve la ficha del titular del telefono en el comprobante', async () => {
+    const { prisma, tx } = crearPrisma();
+    tx.usuario.findUnique.mockImplementation(
+      async ({ where }: { where: { id?: string; telefono?: string } }) =>
+        where.telefono
+          ? { id: 'usr-registrado', activo: true }
+          : { id: where.id, activo: true },
+    );
+
+    const comprobante = await new CitasService(prisma).reservar({
+      ...dtoBase,
+      ...datosInvitado,
+    });
+
+    // Si el telefono ya era de un cliente registrado, devolver su `cliente` haria de
+    // la reserva de invitado una consulta de datos ajenos.
+    expect(comprobante).not.toHaveProperty('cliente');
+    expect(comprobante).not.toHaveProperty('registradaPor');
+    expect(comprobante).toHaveProperty('id', 'cita-1');
   });
 });
 
@@ -255,9 +368,15 @@ describe('CitasService.update', () => {
     const { prisma, tx } = crearPrisma();
     tx.cita.findUnique.mockResolvedValue(CITA_GUARDADA);
 
-    await new CitasService(prisma).update('cita-1', { inicio: '2026-09-07T12:00:00.000Z' }, ADMIN);
+    await new CitasService(prisma).update(
+      'cita-1',
+      { inicio: '2026-09-07T12:00:00.000Z' },
+      ADMIN,
+    );
 
-    expect(tx.cita.findFirst.mock.calls[0][0].where.id).toEqual({ not: 'cita-1' });
+    expect(tx.cita.findFirst.mock.calls[0][0].where.id).toEqual({
+      not: 'cita-1',
+    });
     expect(tx.cita.update.mock.calls[0][0].data.slotOcupado.toISOString()).toBe(
       '2026-09-07T12:00:00.000Z',
     );
@@ -267,7 +386,11 @@ describe('CitasService.update', () => {
     const { prisma, tx } = crearPrisma();
     tx.cita.findUnique.mockResolvedValue(CITA_GUARDADA);
 
-    await new CitasService(prisma).update('cita-1', { estadoCodigo: 'CANCELADA' }, ADMIN);
+    await new CitasService(prisma).update(
+      'cita-1',
+      { estadoCodigo: 'CANCELADA' },
+      ADMIN,
+    );
 
     expect(tx.cita.update.mock.calls[0][0].data.slotOcupado).toBeNull();
     expect(tx.cita.findFirst).not.toHaveBeenCalled();
@@ -275,13 +398,24 @@ describe('CitasService.update', () => {
 });
 
 describe('CitasService.cancelar', () => {
-  const citaConfirmada = { id: 'cita-1', inicio: new Date(INICIO), estado: CONFIRMADA };
+  const citaConfirmada = {
+    id: 'cita-1',
+    inicio: new Date(INICIO),
+    estado: CONFIRMADA,
+  };
 
   it('suelta slotOcupado, que es lo que devuelve el espacio a la agenda', async () => {
     const { prisma, tx } = crearPrisma();
-    tx.cita.findUnique.mockResolvedValue({ ...citaConfirmada, estado: PENDIENTE });
+    tx.cita.findUnique.mockResolvedValue({
+      ...citaConfirmada,
+      estado: PENDIENTE,
+    });
 
-    await new CitasService(prisma).cancelar('cita-1', { motivo: 'imprevisto' }, CLIENTE);
+    await new CitasService(prisma).cancelar(
+      'cita-1',
+      { motivo: 'imprevisto' },
+      CLIENTE,
+    );
 
     const { data } = tx.cita.update.mock.calls[0][0];
     expect(data.estadoId).toBe(CANCELADA.id);
@@ -315,7 +449,9 @@ describe('CitasService.findAll', () => {
 
     const cliente = crearPrisma();
     await new CitasService(cliente.prisma).findAll(CLIENTE);
-    expect(cliente.tx.cita.findMany.mock.calls[0][0].where).toEqual({ clienteId: 'usr-cli' });
+    expect(cliente.tx.cita.findMany.mock.calls[0][0].where).toEqual({
+      clienteId: 'usr-cli',
+    });
   });
 
   it('no muestra nada a un EMPLEADO sin ficha de empleado', async () => {

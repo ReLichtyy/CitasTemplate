@@ -19,7 +19,7 @@ en la semilla y se revisa igual que el código.
 
 **Los importes de `Cita` son copias congeladas.** `precioServicio`, `costoAdicionales` y
 `costoTotal` guardan lo que valía el servicio el día de la reserva, para que subir un precio
-no reescriba el historial. Los calcula el servidor; ver `02`.
+no reescriba el historial. Los calcula el servidor; ver `02-reservas-concurrencia.md`.
 
 **Las horas del día son minutos desde medianoche** (`0..1439`) en `HorarioAtencion`. Evita
 la ambigüedad de zona horaria de `TIME` y hace trivial la aritmética de traslape. Los

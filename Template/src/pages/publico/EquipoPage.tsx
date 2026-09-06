@@ -130,7 +130,7 @@ const SERVICIOS: Servicio[] = [
   },
 ];
 
-// spec/08: las dos rejillas son la misma a proposito. Una sola constante lo garantiza.
+// 08-pagina-especialistas.md: las dos rejillas son la misma a proposito. Una sola constante lo garantiza.
 const GRID_CLASSES = 'stagger-in grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3';
 
 // Encabezado de seccion: centrado, con una regla de acento corta debajo. Las dos

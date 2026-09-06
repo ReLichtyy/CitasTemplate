@@ -1,36 +1,49 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-text: #57505f;
-  --color-text-h: #08060d;
-  /* No aclarar: a #857f8e caia a 3.6:1 sobre bg-surface, debajo del 4.5:1 de spec/05. */
-  --color-text-muted: #6f6a78;
-  --color-bg: #ffffff;
-  --color-surface: #f7f6fb;
-  --color-border: #e5e4e7;
-  --color-accent: #aa3bff;
-  --color-accent-bg: rgba(170, 59, 255, 0.1);
-  --color-accent-border: rgba(170, 59, 255, 0.5);
-  --color-price: #b45309;
+  --color-text: #4a525c;
+  --color-text-h: #101519;
+  /* No aclarar: por debajo de esto cae de 4.5:1 sobre el fondo. */
+  --color-text-muted: #5e6873;
+  /* Plateado claro. Las tarjetas son blancas y flotan sobre el. */
+  --color-bg: #f8fafb;
+  --color-surface: #ffffff;
+  --color-border: #e6eaee;
+  --color-accent: #c2410c;
+  /* Blanco calido, no #ffffff: sobre naranja el blanco puro vibra. */
+  --color-accent-fg: #fff7f2;
+  /* Verde azulado: el precio no puede compartir color con lo que se toca. */
+  --color-price: #0f766e;
+  --color-danger: #b91c1c;
+
+  /* Derivados del acento: cambiar --color-accent regenera los cuatro.
+     El hover mezcla hacia --color-text-h, asi que oscurece en claro
+     y aclara en oscuro sin redefinirlo por tema. */
+  --color-accent-bg: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  --color-accent-border: color-mix(in oklab, var(--color-accent) 42%, transparent);
+  --color-accent-hover: color-mix(in oklab, var(--color-accent) 82%, var(--color-text-h));
+  --color-glow: color-mix(in oklab, var(--color-accent) 9%, transparent);
+  /* Lineas del grid. Derivadas del borde: un solo tono que ajustar. */
+  --color-grid: color-mix(in oklab, var(--color-border) 82%, transparent);
 
   --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --font-heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  @theme {
-    --color-text: #b4bac6;
-    --color-text-h: #f8f9fb;
-    --color-text-muted: #868d99;
-    --color-bg: #16171d;
-    --color-surface: #1c1d24;
-    --color-border: #2e303a;
-    --color-accent: #c084fc;
-    --color-accent-bg: rgba(192, 132, 252, 0.15);
-    --color-accent-border: rgba(192, 132, 252, 0.5);
-    --color-price: #fbbf24;
-  }
+/* Oscuro es opt-in, no automatico: el producto es claro por defecto.
+   Para activarlo, <html data-theme="dark">. */
+:root[data-theme='dark'] {
+  --color-text: #a8b0ba;
+  --color-text-h: #f4f6f8;
+  --color-text-muted: #7d8791;
+  --color-bg: #14161a;
+  --color-surface: #1c1f24;
+  --color-border: #2e333a;
+  --color-accent: #fb923c;
+  --color-accent-fg: #2a1206;
+  --color-price: #2dd4bf;
+  --color-danger: #f87171;
 }
 
 /* Animaciones. No dependen del tema, por eso viven en su propio bloque. */
@@ -85,7 +98,7 @@
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -113,10 +126,52 @@ body {
   font: 18px/145% var(--font-sans);
   letter-spacing: 0.18px;
   color: var(--color-text);
-  background: var(--color-bg);
+  /* Plateado con grid: dos gradientes de 1px sobre el color de fondo, y el
+     background-size define la celda. Sigue el tema solo, porque --color-grid
+     deriva de --color-border. */
+  background-color: var(--color-bg);
+  background-image:
+    linear-gradient(to right, var(--color-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-grid) 1px, transparent 1px);
+  background-size: 72px 72px;
+  background-position: -1px -1px;
+  background-attachment: fixed;
+}
+
+/* Iluminacion del grid: una mancha de luz enorme y muy tenue que cruza el fondo
+   despacio. 9% de opacidad y 28s por tramo — se percibe como que el fondo respira,
+   no como una animacion. Solo transform y opacity, asi que no repinta el layout. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -25%;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(38% 38% at 50% 50%, var(--color-glow), transparent 70%);
+  animation: grid-glow 28s ease-in-out infinite alternate;
+}
+
+@keyframes grid-glow {
+  from {
+    transform: translate3d(-9%, -7%, 0) scale(1);
+    opacity: 0.45;
+  }
+  to {
+    transform: translate3d(9%, 7%, 0) scale(1.12);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none;
+    opacity: 0.6;
+  }
 }
 
 #root {
+  position: relative;
+  z-index: 1;
   min-height: 100svh;
   display: flex;
   flex-direction: column;

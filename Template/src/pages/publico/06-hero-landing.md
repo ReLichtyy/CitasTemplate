@@ -2,7 +2,7 @@
 
 Alcance: `Template/src/pages/publico/LandingPage.tsx`. Es la primera pantalla y la única
 que un visitante ve sin sesión, así que carga sola el peso de la primera impresión.
-Paleta y tokens: `05`.
+Los tokens de color y las reglas de adaptabilidad ya están cargadas: `Template/CLAUDE.md`.
 
 ## Composición
 
@@ -13,7 +13,8 @@ blanco es el recurso; una foto de stock lo abarata y además ataría el producto
 De arriba a abajo:
 
 1. **Logo** — `ConfiguracionNegocio.logoUrl`, con `alt` igual al nombre del negocio.
-   Altura máxima 56 px en móvil, 72 px desde `md`, ancho automático. Si `logoUrl` es nulo,
+   Altura `max-h-14` en móvil y `md:max-h-18` desde `md` (56 y 72 px), ancho automático.
+   Si `logoUrl` es nulo,
    se muestra el **nombre del negocio** como palabra, en `text-h` con tracking cerrado.
    Nunca aparece la cadena "CitasTemplate": es el nombre del repositorio, no de un producto.
 2. **`h1`** — `ConfiguracionNegocio.eslogan` si existe; si no, un titular neutro de rubro.
@@ -35,7 +36,7 @@ no como una lista centrada.
 El segundo botón **no** dice "Especialistas" escrito en el componente. Sale del vocabulario
 configurable: el valor por defecto es `"Especialistas"`, y un negocio que prefiera
 "Profesionales", "Terapeutas" o "Técnicos" lo cambia en su configuración sin tocar código.
-Es la regla de `05` aplicada al caso concreto que la motivó.
+Es el vocabulario configurable aplicado al caso concreto que lo motivó.
 
 La ruta sigue siendo `/equipo`. Los nombres internos no cambian nunca; lo que cambia es lo
 que el usuario lee.
@@ -51,11 +52,18 @@ del hero se extrae un `ButtonLink` que comparta las variantes de `Button`, y se 
 las dos copias existentes. Un tercer duplicado sería el momento en que las variantes se
 desincronizan.
 
-**El botón principal manda a los invitados a un callejón.** `/citas/reservar` cuelga de
-`ProtectedRoute`, así que un visitante sin sesión termina en el login sin forma de volver a
-lo que quería hacer. Para el CTA central de un producto de reservas eso no es aceptable:
-`ProtectedRoute` debe recordar el destino y el login debe devolver ahí después de entrar.
-Es la única funcionalidad nueva que este spec exige.
+**El botón principal llevaba a los invitados a un callejón.** `/citas/reservar` colgaba de
+`ProtectedRoute`, así que un visitante sin sesión terminaba en el login sin forma de volver
+a lo que quería hacer. Para el CTA central de un producto de reservas eso no era aceptable.
+
+Se resolvió abriendo la ruta, no arreglando el desvío: **se reserva sin sesión**, dando
+teléfono y nombre. El candado salió de `/citas/reservar` y sigue puesto en `/citas`, que es
+donde vive lo que sí es privado — y ahí un invitado va a la página de sin acceso, no al
+login, porque entrar no le resolvería nada. Ver `03-autorizacion.md`.
+
+El destino de retorno queda pendiente, pero ya no como requisito de este spec:
+`ProtectedRoute` guarda el destino en `state.from` y nadie lo consume todavía, porque
+`LoginPage` sigue siendo un placeholder. Importa para la gestión, no para el hero.
 
 ## Qué se va
 

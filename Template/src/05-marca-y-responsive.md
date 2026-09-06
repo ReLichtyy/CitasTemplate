@@ -48,9 +48,9 @@ y el más visible.
 **Listas de gestión: `Card` en móvil, tabla desde `md`.** No se meten seis columnas en 360 px. El patrón
 de `Card` que ya existe es la versión angosta. Aplica solo a las vistas de gestión, que
 tienen muchas columnas: los catálogos públicos (servicios, equipo) **nunca** se vuelven
-tabla, son rejilla de cards en todos los anchos. Ver `07`.
+tabla, son rejilla de cards en todos los anchos.
 
-**Objetivos táctiles de 44 px** de alto mínimo en cualquier cosa que se toque. Afecta sobre
+**Objetivos táctiles de 44 px** (`min-h-11`) de alto mínimo en cualquier cosa que se toque. Afecta sobre
 todo al selector de horarios de `ReservarPage`, que es una grilla de objetivos chicos.
 
 **El selector de fecha y hora es el caso difícil.** Es la pantalla que decide si el producto
@@ -150,3 +150,31 @@ una dependencia para eso no se paga. Van como SVG en línea dentro de
 `components/ui/icons.tsx`, con `currentColor` en el trazo para que hereden el color del
 contexto y `aria-hidden="true"` porque son decorativos: el texto de la card ya dice a dónde
 va. Si el catálogo pasa de ocho iconos, ahí sí se reevalúa traer una librería.
+
+## Cómo se escriben las clases
+
+Tailwind v4, utilidades canónicas. Un valor entre corchetes es la última salida, no la
+primera: la escala de espaciado de v4 es dinámica y acepta cualquier múltiplo y fracción, así
+que casi todo lo que se querría poner entre corchetes ya tiene nombre.
+
+| En vez de | Se escribe |
+|---|---|
+| `w-[420px]` | `w-105` |
+| `px-[9px]` | `px-2.25` |
+| `h-12 w-12` | `size-12` |
+| `bg-gradient-to-b` | `bg-linear-to-b` |
+| `break-words` | `wrap-break-word` |
+| `[field-sizing:content]` | `field-sizing-content` |
+| `flex-shrink-0` | `shrink-0` |
+| `outline-none` | `outline-hidden` |
+| `bg-opacity-50` | `bg-black/50` |
+
+Ojo con las escalas que v4 corrió un lugar: `shadow` pasó a `shadow-sm`, `shadow-sm` a
+`shadow-xs`, y lo mismo con `rounded` y `blur`. Escribir el nombre de v3 no da error —
+aplica otro valor, que es peor.
+
+Los corchetes quedan para lo que de verdad no tiene utilidad, como una plantilla de rejilla
+puntual. Y valen una pregunta: **un valor arbitrario que aparece dos veces es un token que
+falta.** Si es un color, va a `@theme`; si es una medida del sistema, también. Repetirlo
+entre corchetes es cómo se pierde la capacidad de rebrandear sin abrir componentes, que es
+justo lo que este documento existe para proteger.

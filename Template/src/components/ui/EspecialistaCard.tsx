@@ -18,7 +18,7 @@ export function EspecialistaCard({ especialista, onSelect }: EspecialistaCardPro
   return (
     <button type="button" onClick={onSelect} className={CARD_INTERACTIVE_CLASSES}>
       <div className="flex items-center gap-2">
-        {/* 48 px fijo (spec/08 pedia 56 desde sm): con el rating en la misma fila, esos
+        {/* 48 px fijo (08-pagina-especialistas.md pedia 56 desde sm): con el rating en la misma fila, esos
             8 px extra son los que le faltaban al nombre para entrar en una linea. */}
         <Thumbnail
           src={fotoUrl}

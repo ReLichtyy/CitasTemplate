@@ -1,4 +1,4 @@
-// Modelo de datos. Invariantes y decisiones: ../../spec/01-modelo-datos.md
+// Modelo de datos. Invariantes y decisiones: 01-modelo-datos.md (misma carpeta)
 //
 // Horas del dia se guardan como minutos desde medianoche (0..1439), no como TIME:
 // la aritmetica de traslape es trivial y no arrastra zona horaria.
@@ -43,7 +43,7 @@ model ConfiguracionNegocio {
   logoUrl               String?
   colorAcento           String   @default("#aa3bff")
   /// Vocabulario visible. Permite que la misma app diga "Tratamiento" o "Sesion"
-  /// sin tocar codigo. Ver spec/05.
+  /// sin tocar codigo. Ver 05-marca-y-responsive.md.
   terminoServicio       String   @default("Servicio")
   terminoServicioPlural String   @default("Servicios")
   terminoEmpleado       String   @default("Profesional")
@@ -65,7 +65,9 @@ model Usuario {
   telefono      String   @unique
   email         String?
   /// Hash bcrypt. Nunca se serializa hacia el cliente.
-  password      String
+  /// Nulo en las fichas que crea una reserva de invitado: existen para colgar la cita
+  /// de un telefono, no para iniciar sesion. El login rechaza a quien no lo tiene.
+  password      String?
   nombre        String
   apellido      String?
   rol           Rol      @default(CLIENTE)
@@ -183,7 +185,7 @@ model Cita {
   fin    DateTime
   /// Espejo de `inicio` mientras el estado bloquea disponibilidad; NULL cuando no.
   /// MySQL admite NULLs repetidos en un indice unico, asi que una cita cancelada
-  /// libera el espacio mientras la fila sobrevive. Ver spec/02.
+  /// libera el espacio mientras la fila sobrevive. Ver 02-reservas-concurrencia.md.
   slotOcupado DateTime?
 
   /// Copias al momento de reservar. Las calcula el servidor, nunca el cliente.

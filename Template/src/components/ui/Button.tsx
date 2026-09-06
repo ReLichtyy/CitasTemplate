@@ -7,7 +7,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 export const BUTTON_VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-white hover:opacity-90',
+  primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
   secondary: 'bg-transparent text-text-h border border-border hover:bg-accent-bg',
 };
 

@@ -1,7 +1,10 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
+import {
+  AUTH_OPCIONAL_KEY,
+  IS_PUBLIC_KEY,
+} from '../decorators/public.decorator.js';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -9,7 +12,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -17,6 +20,23 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     if (isPublic) {
       return true;
     }
-    return super.canActivate(context);
+
+    const authOpcional = this.reflector.getAllAndOverride<boolean>(
+      AUTH_OPCIONAL_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (!authOpcional) {
+      return (await super.canActivate(context)) as boolean;
+    }
+
+    // Con token valido, `request.user` queda puesto; sin el, o con uno vencido, la
+    // peticion sigue como invitado. Passport lanza en los dos casos, asi que el
+    // fallo se ignora aqui a proposito y la autorizacion la decide el handler.
+    try {
+      await super.canActivate(context);
+    } catch {
+      // Invitado.
+    }
+    return true;
   }
 }

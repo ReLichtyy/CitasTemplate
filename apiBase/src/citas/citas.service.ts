@@ -8,7 +8,13 @@ import {
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { Role } from '../common/enums/role.enum.js';
-import { instanteDesdeZona, partesEnZona, seTraslapan, sumarMinutos } from '../common/tiempo.js';
+import {
+  instanteDesdeZona,
+  partesEnZona,
+  seTraslapan,
+  sumarMinutos,
+} from '../common/tiempo.js';
+import { normalizarTelefono } from '../common/telefono.js';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface.js';
 import type { ActualizarCitaDto } from './dto/actualizar-cita.dto.js';
 import type { CancelarCitaDto } from './dto/cancelar-cita.dto.js';
@@ -25,13 +31,13 @@ const ZONA_POR_DEFECTO = 'UTC';
 
 /**
  * El 409 es el unico error que el usuario final lee tal cual, asi que se redacta
- * para el. Ver spec/04.
+ * para el. Ver 04-contrato-api.md.
  */
 const MENSAJE_TRASLAPE = 'Ese horario ya esta tomado. Elija otro.';
 /** Mismo texto para "no existe" y "no es suya": un 404 aqui confirmaria ids ajenos. */
 const MENSAJE_NO_ENCONTRADO = 'Recurso no encontrado.';
 
-/** Usuario.password nunca sale de la capa de servicios. Ver spec/04. */
+/** Usuario.password nunca sale de la capa de servicios. Ver 04-contrato-api.md. */
 const USUARIO_PUBLICO = {
   id: true,
   nombre: true,
@@ -77,7 +83,7 @@ export class CitasService {
 
   /**
    * El filtrado por propiedad de una lista no lo puede hacer el guard, que solo ve
-   * un id de ruta: aqui va en la consulta. Ver spec/03.
+   * un id de ruta: aqui va en la consulta. Ver 03-autorizacion.md.
    */
   async findAll(user: AuthenticatedUser) {
     return this.prisma.cita.findMany({
@@ -89,7 +95,10 @@ export class CitasService {
 
   /** La propiedad de esta cita ya la comprobo PropiedadCitaGuard. */
   async findOne(id: string, _user: AuthenticatedUser) {
-    const cita = await this.prisma.cita.findUnique({ where: { id }, include: INCLUIR_CITA });
+    const cita = await this.prisma.cita.findUnique({
+      where: { id },
+      include: INCLUIR_CITA,
+    });
     if (!cita) {
       throw new NotFoundException(MENSAJE_NO_ENCONTRADO);
     }
@@ -100,14 +109,13 @@ export class CitasService {
    * La operacion con la carrera. Verificacion e insercion van dentro de la misma
    * `$transaction`, que es lo que cubre el traslape parcial; el unique
    * `(empleadoId, slotOcupado)` cubre el choque exacto de hora. Los dos hacen falta,
-   * y la violacion de unicidad se traduce al mismo error de negocio. Ver spec/02.
+   * y la violacion de unicidad se traduce al mismo error de negocio. Ver 02-reservas-concurrencia.md.
    */
-  async reservar(dto: ReservarCitaDto, user: AuthenticatedUser) {
-    const clienteId = this.resolverCliente(dto, user);
+  async reservar(dto: ReservarCitaDto, user?: AuthenticatedUser) {
     const inicio = new Date(dto.inicio);
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const cita = await this.prisma.$transaction(async (tx) => {
         const { servicio, empleado, fin } = await this.cargarContexto(
           tx,
           dto.servicioId,
@@ -115,29 +123,30 @@ export class CitasService {
           inicio,
         );
 
-        await this.verificarDisponibilidad(tx, { servicio, empleado, inicio, fin });
-
-        const cliente = await tx.usuario.findUnique({
-          where: { id: clienteId },
-          select: { id: true, activo: true },
+        await this.verificarDisponibilidad(tx, {
+          servicio,
+          empleado,
+          inicio,
+          fin,
         });
-        if (!cliente || !cliente.activo) {
-          throw new NotFoundException(MENSAJE_NO_ENCONTRADO);
-        }
 
+        const clienteId = await this.resolverCliente(tx, dto, user);
         const adicionales = await this.cargarAdicionales(tx, dto.adicionalIds);
         const estado = await this.estadoDeCatalogo(tx, CODIGO_ESTADO_INICIAL);
 
-        // Importes recalculados desde la base; el cuerpo nunca los aporta. Ver spec/02.
+        // Importes recalculados desde la base; el cuerpo nunca los aporta. Ver 02-reservas-concurrencia.md.
         const precioServicio = servicio.precio;
         const costoAdicionales = this.sumarPrecios(adicionales);
-        const costoTotal = new Prisma.Decimal(precioServicio).add(costoAdicionales);
+        const costoTotal = new Prisma.Decimal(precioServicio).add(
+          costoAdicionales,
+        );
 
         return await tx.cita.create({
           data: {
             clienteId,
-            // Quien digito, siempre el del token, mande lo que mande el cuerpo.
-            registradaPorId: user.userId,
+            // Quien digito. Con sesion es siempre el del token, mande lo que mande el
+            // cuerpo; sin ella, el invitado se registra a si mismo.
+            registradaPorId: user?.userId ?? clienteId,
             empleadoId: empleado.id,
             servicioId: servicio.id,
             estadoId: estado.id,
@@ -158,6 +167,9 @@ export class CitasService {
           include: INCLUIR_CITA,
         });
       });
+
+      // Un invitado se lleva su comprobante, no la ficha del titular del telefono.
+      return user ? cita : this.comprobanteDeInvitado(cita);
     } catch (error) {
       throw this.traducirChoqueDeUnicidad(error);
     }
@@ -167,12 +179,15 @@ export class CitasService {
    * Reprogramar y cambiar de estado son la misma operacion porque comparten el
    * invariante: si el estado resultante bloquea disponibilidad, `slotOcupado` vale
    * `inicio`, y si no, `NULL`. Se actualiza en la misma transaccion que el estado;
-   * olvidarlo deja horarios ocupados para siempre. Ver spec/02.
+   * olvidarlo deja horarios ocupados para siempre. Ver 02-reservas-concurrencia.md.
    */
   async update(id: string, dto: ActualizarCitaDto, _user: AuthenticatedUser) {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const cita = await tx.cita.findUnique({ where: { id }, include: { estado: true } });
+        const cita = await tx.cita.findUnique({
+          where: { id },
+          include: { estado: true },
+        });
         if (!cita) {
           throw new NotFoundException(MENSAJE_NO_ENCONTRADO);
         }
@@ -184,7 +199,9 @@ export class CitasService {
           dto.adicionalIds !== undefined;
 
         if (reprograma && !cita.estado.permiteEdicion) {
-          throw new ConflictException(`Una cita ${cita.estado.nombre} ya no se puede modificar.`);
+          throw new ConflictException(
+            `Una cita ${cita.estado.nombre} ya no se puede modificar.`,
+          );
         }
 
         const estadoDestino = dto.estadoCodigo
@@ -212,7 +229,7 @@ export class CitasService {
         }
 
         // Los importes son copias congeladas del dia de la reserva: solo se vuelven a
-        // leer las partes que el cliente cambia. Ver spec/01.
+        // leer las partes que el cliente cambia. Ver 01-modelo-datos.md.
         const precioServicio =
           dto.servicioId && dto.servicioId !== cita.servicioId
             ? servicio.precio
@@ -243,7 +260,9 @@ export class CitasService {
             slotOcupado: estadoDestino.bloqueaDisponibilidad ? inicio : null,
             precioServicio,
             costoAdicionales,
-            costoTotal: new Prisma.Decimal(precioServicio).add(costoAdicionales),
+            costoTotal: new Prisma.Decimal(precioServicio).add(
+              costoAdicionales,
+            ),
             notas: dto.notas ?? cita.notas,
             adicionales,
           },
@@ -258,18 +277,22 @@ export class CitasService {
   /**
    * Cancelar no borra la fila: cambia el estado y suelta `slotOcupado`. MySQL admite
    * NULLs repetidos en un indice unico, asi que el espacio queda libre aunque la cita
-   * siga existiendo. Ver spec/02.
+   * siga existiendo. Ver 02-reservas-concurrencia.md.
    */
   async cancelar(id: string, dto: CancelarCitaDto, user: AuthenticatedUser) {
     return this.prisma.$transaction(async (tx) => {
-      const cita = await tx.cita.findUnique({ where: { id }, include: { estado: true } });
+      const cita = await tx.cita.findUnique({
+        where: { id },
+        include: { estado: true },
+      });
       if (!cita) {
         throw new NotFoundException(MENSAJE_NO_ENCONTRADO);
       }
 
       // Los dos indicadores estan separados justamente para este caso: una cita
-      // Confirmada no la cancela el cliente, pero el personal si. Ver spec/01.
-      const esPersonal = user.role === Role.ADMIN || user.role === Role.EMPLEADO;
+      // Confirmada no la cancela el cliente, pero el personal si. Ver 01-modelo-datos.md.
+      const esPersonal =
+        user.role === Role.ADMIN || user.role === Role.EMPLEADO;
       const permitido = esPersonal
         ? cita.estado.permiteCancelacionPersonal
         : cita.estado.permiteCancelacionCliente;
@@ -282,7 +305,10 @@ export class CitasService {
         );
       }
 
-      const cancelada = await this.estadoDeCatalogo(tx, CODIGO_ESTADO_CANCELADA);
+      const cancelada = await this.estadoDeCatalogo(
+        tx,
+        CODIGO_ESTADO_CANCELADA,
+      );
 
       return await tx.cita.update({
         where: { id },
@@ -358,7 +384,7 @@ export class CitasService {
         const fin = sumarMinutos(inicio, servicio.duracionMinutos);
 
         // Filtro de listado, no una sexta regla: ofrecer un horario ya pasado no es
-        // util. La verificacion de `reservar` sigue siendo la de spec/02.
+        // util. La verificacion de `reservar` sigue siendo la de 02-reservas-concurrencia.md.
         if (inicio.getTime() <= ahora) {
           continue;
         }
@@ -366,7 +392,9 @@ export class CitasService {
         const chocaConRestriccion = restricciones.some((restriccion) =>
           seTraslapan(inicio, fin, restriccion.inicio, restriccion.fin),
         );
-        const chocaConCita = ocupadas.some((cita) => seTraslapan(inicio, fin, cita.inicio, cita.fin));
+        const chocaConCita = ocupadas.some((cita) =>
+          seTraslapan(inicio, fin, cita.inicio, cita.fin),
+        );
 
         if (!chocaConRestriccion && !chocaConCita) {
           slots.push({ inicio: inicio.toISOString(), fin: fin.toISOString() });
@@ -383,7 +411,7 @@ export class CitasService {
   }
 
   /**
-   * Crear y modificar pasan por aqui, en este orden. Cinco reglas, ver spec/02.
+   * Crear y modificar pasan por aqui, en este orden. Cinco reglas, ver 02-reservas-concurrencia.md.
    * Cada rechazo lleva su propio mensaje porque es lo que el usuario va a leer.
    */
   private async verificarDisponibilidad(
@@ -406,10 +434,14 @@ export class CitasService {
     // de `fin`: una cita que cruza medianoche daria un minuto menor y pareceria caber.
     const minutoFin = minutoInicio + servicio.duracionMinutos;
     const cabe = franjas.some(
-      (franja) => franja.minutoApertura <= minutoInicio && minutoFin <= franja.minutoCierre,
+      (franja) =>
+        franja.minutoApertura <= minutoInicio &&
+        minutoFin <= franja.minutoCierre,
     );
     if (!cabe) {
-      throw new ConflictException('Ese horario esta fuera del horario de atencion.');
+      throw new ConflictException(
+        'Ese horario esta fuera del horario de atencion.',
+      );
     }
 
     // 3 · ninguna restriccion traslapa, ni general (empleadoId nulo) ni de ese empleado.
@@ -449,13 +481,19 @@ export class CitasService {
     empleado: EmpleadoVerificable,
   ): void {
     if (!servicio.activo) {
-      throw new ConflictException('El servicio seleccionado ya no esta disponible.');
+      throw new ConflictException(
+        'El servicio seleccionado ya no esta disponible.',
+      );
     }
     if (!empleado.activo) {
-      throw new ConflictException('El profesional seleccionado ya no esta disponible.');
+      throw new ConflictException(
+        'El profesional seleccionado ya no esta disponible.',
+      );
     }
     if (!servicio.empleados.some((asignado) => asignado.id === empleado.id)) {
-      throw new ConflictException('El profesional seleccionado no realiza ese servicio.');
+      throw new ConflictException(
+        'El profesional seleccionado no realiza ese servicio.',
+      );
     }
   }
 
@@ -477,38 +515,149 @@ export class CitasService {
     }
 
     // El servidor calcula `fin`. Los adicionales suman costo y nunca duracion.
-    return { servicio, empleado, fin: sumarMinutos(inicio, servicio.duracionMinutos) };
+    return {
+      servicio,
+      empleado,
+      fin: sumarMinutos(inicio, servicio.duracionMinutos),
+    };
   }
 
-  private async cargarAdicionales(tx: Prisma.TransactionClient, ids?: string[]) {
+  private async cargarAdicionales(
+    tx: Prisma.TransactionClient,
+    ids?: string[],
+  ) {
     const unicos = [...new Set(ids ?? [])];
     if (unicos.length === 0) {
       return [];
     }
 
-    const adicionales = await tx.servicioAdicional.findMany({ where: { id: { in: unicos } } });
+    const adicionales = await tx.servicioAdicional.findMany({
+      where: { id: { in: unicos } },
+    });
     if (adicionales.length !== unicos.length) {
       throw new NotFoundException(MENSAJE_NO_ENCONTRADO);
     }
     if (adicionales.some((adicional) => !adicional.activo)) {
-      throw new ConflictException('Alguno de los adicionales elegidos ya no esta disponible.');
+      throw new ConflictException(
+        'Alguno de los adicionales elegidos ya no esta disponible.',
+      );
     }
     return adicionales;
   }
 
-  private sumarPrecios(adicionales: { precio: Prisma.Decimal }[]): Prisma.Decimal {
+  private sumarPrecios(
+    adicionales: { precio: Prisma.Decimal }[],
+  ): Prisma.Decimal {
     return adicionales.reduce(
       (total, adicional) => total.add(adicional.precio),
       new Prisma.Decimal(0),
     );
   }
 
-  private resolverCliente(dto: ReservarCitaDto, user: AuthenticatedUser): string {
-    const esPersonal = user.role === Role.ADMIN || user.role === Role.EMPLEADO;
-    return esPersonal && dto.clienteId ? dto.clienteId : user.userId;
+  /**
+   * De quien es la cita. Con sesion sale del token; sin ella, del telefono, que es
+   * la identidad del cliente en este producto (SPEC.md).
+   *
+   * Un invitado cuyo telefono ya existe cuelga la cita de esa ficha, pero **no** la
+   * reescribe: nadie puede cambiarle el nombre o el correo a un cliente registrado
+   * escribiendo su numero. Queda en pie que reservar a nombre de un telefono ajeno es
+   * posible; sin verificacion del numero no hay forma de impedirlo, y lo que si se
+   * impide es que la respuesta revele algo de la ficha — ver `comprobanteDeInvitado`.
+   */
+  private async resolverCliente(
+    tx: Prisma.TransactionClient,
+    dto: ReservarCitaDto,
+    user?: AuthenticatedUser,
+  ): Promise<string> {
+    if (user) {
+      const esPersonal =
+        user.role === Role.ADMIN || user.role === Role.EMPLEADO;
+      const id = esPersonal && dto.clienteId ? dto.clienteId : user.userId;
+      const cliente = await tx.usuario.findUnique({
+        where: { id },
+        select: { id: true, activo: true },
+      });
+      if (!cliente || !cliente.activo) {
+        throw new NotFoundException(MENSAJE_NO_ENCONTRADO);
+      }
+      return cliente.id;
+    }
+
+    if (!dto.cliente) {
+      throw new BadRequestException(
+        'Hacen falta sus datos de contacto para reservar.',
+      );
+    }
+
+    const telefono = normalizarTelefono(dto.cliente.telefono);
+    const existente = await tx.usuario.findUnique({
+      where: { telefono },
+      select: { id: true, activo: true },
+    });
+    if (existente) {
+      if (!existente.activo) {
+        throw new ConflictException(
+          'Ese telefono no puede reservar; comuniquese con el negocio.',
+        );
+      }
+      return existente.id;
+    }
+
+    // Ficha sin contrasena: existe para colgar la cita de un telefono, no para
+    // iniciar sesion. Ver el comentario de `Usuario.password` en el esquema.
+    const creado = await tx.usuario.create({
+      data: {
+        telefono,
+        nombre: dto.cliente.nombre.trim(),
+        apellido: dto.cliente.apellido?.trim(),
+        email: dto.cliente.email?.trim(),
+      },
+      select: { id: true },
+    });
+    return creado.id;
   }
 
-  private async filtroPorPropiedad(user: AuthenticatedUser): Promise<Prisma.CitaWhereInput> {
+  /**
+   * Lo que ve quien reserva sin sesion. Omite `cliente` y `registradaPor` a
+   * proposito: si el telefono ya pertenecia a un cliente registrado, devolver su
+   * ficha convertiria la reserva de invitado en una consulta de datos ajenos.
+   */
+  private comprobanteDeInvitado(cita: {
+    id: string;
+    inicio: Date;
+    fin: Date;
+    precioServicio: Prisma.Decimal;
+    costoAdicionales: Prisma.Decimal;
+    costoTotal: Prisma.Decimal;
+    estado: unknown;
+    servicio: unknown;
+    empleado: {
+      id: string;
+      usuario: { nombre: string; apellido: string | null };
+    };
+  }) {
+    return {
+      id: cita.id,
+      inicio: cita.inicio,
+      fin: cita.fin,
+      precioServicio: cita.precioServicio,
+      costoAdicionales: cita.costoAdicionales,
+      costoTotal: cita.costoTotal,
+      estado: cita.estado,
+      servicio: cita.servicio,
+      empleado: {
+        id: cita.empleado.id,
+        usuario: {
+          nombre: cita.empleado.usuario.nombre,
+          apellido: cita.empleado.usuario.apellido,
+        },
+      },
+    };
+  }
+
+  private async filtroPorPropiedad(
+    user: AuthenticatedUser,
+  ): Promise<Prisma.CitaWhereInput> {
     if (user.role === Role.ADMIN) {
       return {};
     }
@@ -546,7 +695,9 @@ export class CitasService {
     return estado;
   }
 
-  private async zonaHoraria(cliente: Prisma.TransactionClient | PrismaService): Promise<string> {
+  private async zonaHoraria(
+    cliente: Prisma.TransactionClient | PrismaService,
+  ): Promise<string> {
     const config = await cliente.configuracionNegocio.findUnique({
       where: { id: 1 },
       select: { zonaHoraria: true },
@@ -557,10 +708,13 @@ export class CitasService {
   /**
    * El unique `(empleadoId, slotOcupado)` es el que atrapa a dos clientes que pulsan
    * el mismo horario a la vez. Para quien reserva es el mismo hecho que un traslape
-   * detectado, asi que es el mismo error. Ver spec/02.
+   * detectado, asi que es el mismo error. Ver 02-reservas-concurrencia.md.
    */
   private traducirChoqueDeUnicidad(error: unknown): unknown {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
       return new ConflictException(MENSAJE_TRASLAPE);
     }
     return error;

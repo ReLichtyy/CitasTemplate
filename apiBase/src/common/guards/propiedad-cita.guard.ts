@@ -7,14 +7,14 @@ import type { AuthenticatedUser } from '../../auth/jwt-payload.interface.js';
 
 /**
  * Un solo mensaje para "no existe" y para "no es suya". Distinguirlos convertiria
- * la ruta en un oraculo de ids ajenos. Ver spec/03 y spec/04.
+ * la ruta en un oraculo de ids ajenos. Ver 03-autorizacion.md y 04-contrato-api.md.
  */
 const MENSAJE = 'No tiene acceso a este recurso.';
 
 /**
  * Comprueba propiedad, no rol. Registrado como APP_GUARD junto a `RolesGuard`, y
  * como aquel, no hace nada donde no se declaro nada: solo actua sobre las rutas
- * decoradas con `@PropiedadCita()`. Ver spec/03.
+ * decoradas con `@PropiedadCita()`. Ver 03-autorizacion.md.
  */
 @Injectable()
 export class PropiedadCitaGuard implements CanActivate {

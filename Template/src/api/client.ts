@@ -1,6 +1,59 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 const TOKEN_STORAGE_KEY = 'auth_token';
 
+/**
+ * Error del API que conserva el texto que el servidor quiso mostrar y su codigo.
+ *
+ * Importa sobre todo en el 409: es el unico error redactado para que el usuario final
+ * lo lea tal cual, y sin esto las paginas tendrian que inventarse una cadena.
+ * Ver 04-contrato-api.md.
+ */
+export class ApiError extends Error {
+  // Campo declarado aparte: `erasableSyntaxOnly` no admite propiedades de parametro.
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+type SobreRespuesta = { success: boolean; data: unknown; message: string | null };
+
+function esSobre(cuerpo: unknown): cuerpo is SobreRespuesta {
+  return typeof cuerpo === 'object' && cuerpo !== null && 'success' in cuerpo && 'data' in cuerpo;
+}
+
+async function leerCuerpo(response: Response): Promise<unknown> {
+  // Un error puede venir sin cuerpo, o con uno que no es JSON.
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+const MENSAJES_POR_DEFECTO: Record<number, string> = {
+  401: 'Su sesion no es valida. Vuelva a iniciar sesion.',
+  403: 'No tiene acceso a este recurso.',
+  404: 'Recurso no encontrado.',
+};
+
+function mensajeDeError(cuerpo: unknown, response: Response): string {
+  if (typeof cuerpo === 'object' && cuerpo !== null && 'message' in cuerpo) {
+    const { message } = cuerpo as { message: unknown };
+    // El ValidationPipe devuelve un arreglo; 04-contrato-api.md pide mostrar el primero.
+    if (Array.isArray(message) && typeof message[0] === 'string') {
+      return message[0];
+    }
+    if (typeof message === 'string' && message.length > 0) {
+      return message;
+    }
+  }
+  return MENSAJES_POR_DEFECTO[response.status] ?? 'No se pudo completar la operacion.';
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem(TOKEN_STORAGE_KEY);
 
@@ -13,15 +66,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     },
   });
 
-  if (!response.ok) {
-    throw new Error(`API error ${response.status}: ${response.statusText}`);
-  }
-
   if (response.status === 204) {
     return undefined as T;
   }
 
-  return response.json() as Promise<T>;
+  const cuerpo = await leerCuerpo(response);
+
+  if (!response.ok) {
+    throw new ApiError(mensajeDeError(cuerpo, response), response.status);
+  }
+
+  // El sobre de 04-contrato-api.md todavia no lo arma el API. Cuando lo haga, esto lo desenvuelve
+  // solo y las paginas no cambian.
+  return (esSobre(cuerpo) ? cuerpo.data : cuerpo) as T;
 }
 
 export const apiClient = {

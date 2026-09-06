@@ -18,7 +18,7 @@ h2   Servicios              <- terminoServicioPlural, id="servicios"
 ```
 
 Los dos títulos salen del vocabulario configurable, no escritos en el componente: un taller
-verá "Técnicos" y "Reparaciones" sin que nadie toque un `.tsx`. Ver `05`.
+verá "Técnicos" y "Reparaciones" sin que nadie toque un `.tsx`.
 
 Un solo `h1`, el de la primera sección, porque la página es la de especialistas y los
 servicios son el complemento. La sección de servicios lleva `id="servicios"` para que se
@@ -48,7 +48,8 @@ nombre sobre `--color-accent-bg`, en `--color-accent`. Toda card mide igual haya
 y la rejilla no se ve rota. Por eso el especialista lleva imagen y el servicio no: no es
 inconsistencia, es que existe un fallback creíble para una persona y no para un servicio.
 
-Círculo de 48 px en móvil, 56 px desde `sm`, `shrink-0`. Foto con `object-cover`. Iniciales
+Círculo `size-12` en móvil y `sm:size-14` desde `sm` (48 y 56 px), `shrink-0`. Foto con
+`object-cover`. Iniciales
 derivadas de `nombre` y `apellido`; nunca colores aleatorios por persona, que es justo el
 tipo de detalle que satura.
 
@@ -71,7 +72,7 @@ Dos peticiones independientes, cada una por su servicio de `services/`:
 servicios tarden no debe retrasar a los especialistas, y cada sección resuelve su propio
 `Spinner` y su propio `EmptyState`.
 
-Ambos endpoints son los públicos de solo lectura de `03`: solo registros `activo`, solo
+Ambos endpoints son los públicos de solo lectura: solo registros `activo`, solo
 campos públicos. En particular la respuesta de empleados **no** incluye el `Usuario`
 completo: nombre, apellido, especialidad, foto y nada más. El teléfono es la credencial de
 acceso, así que filtrarlo no es opcional.

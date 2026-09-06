@@ -13,7 +13,7 @@ export interface OpcionesPropiedad {
 /**
  * Declara que la ruta exige propiedad, no solo rol. Hermano de `@Roles(...)`:
  * aquel responde "de que tipo es este usuario", este responde "es suya esta cita".
- * Sin el decorador, `PropiedadCitaGuard` no hace nada. Ver spec/03.
+ * Sin el decorador, `PropiedadCitaGuard` no hace nada. Ver 03-autorizacion.md.
  */
 export const PropiedadCita = (opciones: Partial<OpcionesPropiedad> = {}) =>
   SetMetadata<string, OpcionesPropiedad>(PROPIEDAD_KEY, {
