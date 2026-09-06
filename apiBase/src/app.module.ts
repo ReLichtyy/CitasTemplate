@@ -6,6 +6,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
+import { PropiedadCitaGuard } from './common/guards/propiedad-cita.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { HealthController } from './health/health.controller.js';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -35,9 +36,11 @@ import { AdicionalesModule } from './adicionales/adicionales.module.js';
   providers: [
     AppService,
     // Every route requires a valid JWT and passes role checks by default.
-    // Opt out with @Public(), scope with @Roles(...).
+    // Opt out with @Public(), scope with @Roles(...), and declare ownership with
+    // @PropiedadCita() — rol y propiedad son cosas distintas. Ver spec/03.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PropiedadCitaGuard },
   ],
 })
 export class AppModule {}

@@ -62,7 +62,7 @@ export function Navbar() {
     );
 
   return (
-    <header className="border-b border-border">
+    <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-md">
       <nav className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
         <NavLink to="/" className="text-lg font-semibold text-text-h no-underline">
           CitasTemplate

@@ -1,13 +1,13 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-text: #6b6375;
+  --color-text: #57505f;
   --color-text-h: #08060d;
-  --color-text-muted: #9a94a3;
+  /* No aclarar: a #857f8e caia a 3.6:1 sobre bg-surface, debajo del 4.5:1 de spec/05. */
+  --color-text-muted: #6f6a78;
   --color-bg: #ffffff;
   --color-surface: #f7f6fb;
   --color-border: #e5e4e7;
-  --color-code-bg: #f4f3ec;
   --color-accent: #aa3bff;
   --color-accent-bg: rgba(170, 59, 255, 0.1);
   --color-accent-border: rgba(170, 59, 255, 0.5);
@@ -20,17 +20,67 @@
 
 @media (prefers-color-scheme: dark) {
   @theme {
-    --color-text: #9ca3af;
-    --color-text-h: #f3f4f6;
-    --color-text-muted: #6b7280;
+    --color-text: #b4bac6;
+    --color-text-h: #f8f9fb;
+    --color-text-muted: #868d99;
     --color-bg: #16171d;
     --color-surface: #1c1d24;
     --color-border: #2e303a;
-    --color-code-bg: #1f2028;
     --color-accent: #c084fc;
     --color-accent-bg: rgba(192, 132, 252, 0.15);
     --color-accent-border: rgba(192, 132, 252, 0.5);
     --color-price: #fbbf24;
+  }
+}
+
+/* Animaciones. No dependen del tema, por eso viven en su propio bloque. */
+@theme {
+  --animate-fade-up: fade-up 0.5s ease-out both;
+  --animate-modal-in: modal-in 0.22s ease-out;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Entrada escalonada de los hijos directos: la usan las rejillas de cards. El retraso se
+   corta en el sexto para que una lista larga no termine apareciendo de a poco. */
+@utility stagger-in {
+  & > * {
+    animation: fade-up 0.5s ease-out both;
+  }
+  & > *:nth-child(2) {
+    animation-delay: 70ms;
+  }
+  & > *:nth-child(3) {
+    animation-delay: 140ms;
+  }
+  & > *:nth-child(4) {
+    animation-delay: 210ms;
+  }
+  & > *:nth-child(5) {
+    animation-delay: 280ms;
+  }
+  & > *:nth-child(n + 6) {
+    animation-delay: 350ms;
   }
 }
 
@@ -40,6 +90,22 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+/* Quien pidio menos movimiento no recibe ninguna de las animaciones de arriba. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 body {
@@ -56,20 +122,11 @@ body {
   flex-direction: column;
 }
 
+/* 600, no 500: a 500 los titulos se leian como documentacion, no como producto. */
 h1,
-h2 {
+h2,
+h3 {
   font-family: var(--font-heading);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-text-h);
-}
-
-code {
-  font-family: var(--font-mono);
-  font-size: 15px;
-  line-height: 135%;
-  display: inline-flex;
-  border-radius: 4px;
-  padding: 4px 8px;
-  color: var(--color-text-h);
-  background: var(--color-code-bg);
 }

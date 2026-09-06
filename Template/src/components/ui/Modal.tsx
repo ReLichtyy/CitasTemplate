@@ -34,6 +34,9 @@ export function Modal({ open, onClose, titulo, children }: ModalProps) {
     };
   }, [open]);
 
+  // `hidden open:flex`: el <dialog> cerrado ya tiene display:none del navegador, y darle
+  // flex directo lo dejaria visible siempre. Con la columna en flex, solo el cuerpo hace
+  // scroll: la X y el boton Cerrar quedan a la vista en cualquier posicion.
   return (
     <dialog
       ref={dialogRef}
@@ -46,10 +49,10 @@ export function Modal({ open, onClose, titulo, children }: ModalProps) {
           onClose();
         }
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-border bg-surface p-0 text-text backdrop:bg-black/60"
+      className="m-auto hidden max-h-[85dvh] w-[calc(100%-2rem)] max-w-md animate-modal-in flex-col overflow-hidden rounded-2xl border border-border bg-surface/95 p-0 text-text shadow-2xl shadow-black/20 backdrop-blur-md open:flex backdrop:bg-black/60 backdrop:backdrop-blur-sm"
     >
-      <div className="flex items-start justify-between gap-3 border-b border-border p-4 sm:p-6">
-        <h2 id={tituloId} className="text-lg font-medium text-text-h">
+      <div className="flex flex-none items-start justify-between gap-3 border-b border-border/70 px-5 py-3.5 sm:px-6 sm:py-4">
+        <h2 id={tituloId} className="text-xl font-semibold tracking-tight text-text-h">
           {titulo}
         </h2>
         <button
@@ -72,9 +75,9 @@ export function Modal({ open, onClose, titulo, children }: ModalProps) {
         </button>
       </div>
 
-      <div className="flex flex-col gap-4 p-4 sm:p-6">{children}</div>
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5 sm:p-6">{children}</div>
 
-      <div className="flex justify-end border-t border-border p-4 sm:p-6">
+      <div className="flex flex-none justify-end border-t border-border/70 px-5 py-3.5 sm:px-6 sm:py-4">
         <Button variant="secondary" onClick={onClose}>
           Cerrar
         </Button>

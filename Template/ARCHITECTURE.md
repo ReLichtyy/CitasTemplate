@@ -12,7 +12,8 @@ src/
   pages/      # una carpeta por dominio, un archivo por ruta. Mirror del backend (auth/, citas/, gestion/<dominio>/, publico/, sistema/).
   routes/     # guards de routing (ProtectedRoute, RoleRoute).
   services/   # una funcion por endpoint de backend, agrupadas por dominio. Unico lugar que llama apiClient.
-  lib/        # helpers puros sin JSX (formatPrice, formatDuration, especialista) y configuracionPlaceholder (unico lugar con valores de negocio fijos hasta que exista GET /configuracion).
+  lib/        # helpers puros sin JSX (formatPrice, formatDuration, formatFecha, especialista) y configuracionPlaceholder (unico lugar con valores de negocio fijos hasta que exista GET /configuracion).
+  types/      # formas de dominio compartidas (catalogo.ts: Especialista, Servicio, Rating, Resena). Las cards reciben estos objetos, no props sueltas.
   context/    # estado cross-cutting (AuthContext).
   api/        # client.ts, el unico fetch wrapper.
 ```
