@@ -1,7 +1,7 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Modelo de datos. Invariantes y decisiones: ../../spec/01-modelo-datos.md
+//
+// Horas del dia se guardan como minutos desde medianoche (0..1439), no como TIME:
+// la aritmetica de traslape es trivial y no arrastra zona horaria.
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +10,212 @@ generator client {
 
 datasource db {
   provider = "mysql"
+}
+
+enum Rol {
+  ADMIN
+  EMPLEADO
+  CLIENTE
+}
+
+enum DiaSemana {
+  LUNES
+  MARTES
+  MIERCOLES
+  JUEVES
+  VIERNES
+  SABADO
+  DOMINGO
+}
+
+enum TipoRestriccion {
+  FERIADO
+  VACACIONES
+  BLOQUEO
+}
+
+/// Identidad del negocio que despliega el template. Exactamente una fila, id = 1.
+/// Es el unico lugar donde el producto deja de ser generico.
+model ConfiguracionNegocio {
+  id                    Int      @id @default(1)
+  nombre                String
+  eslogan               String?
+  logoUrl               String?
+  colorAcento           String   @default("#aa3bff")
+  /// Vocabulario visible. Permite que la misma app diga "Tratamiento" o "Sesion"
+  /// sin tocar codigo. Ver spec/05.
+  terminoServicio       String   @default("Servicio")
+  terminoServicioPlural String   @default("Servicios")
+  terminoEmpleado       String   @default("Profesional")
+  terminoEmpleadoPlural String   @default("Especialistas")
+  telefonoContacto      String?
+  emailContacto         String?
+  direccion             String?
+  /// ISO 4217 y BCP 47. Los precios se formatean con Intl, nunca con un simbolo fijo.
+  moneda                String   @default("USD")
+  locale                String   @default("es")
+  /// Debe configurarse por despliegue. Toda hora se interpreta en esta zona.
+  zonaHoraria           String   @default("UTC")
+  actualizadoEn         DateTime @updatedAt
+}
+
+model Usuario {
+  id            String   @id @default(uuid())
+  /// Identidad y credencial de login.
+  telefono      String   @unique
+  email         String?
+  /// Hash bcrypt. Nunca se serializa hacia el cliente.
+  password      String
+  nombre        String
+  apellido      String?
+  rol           Rol      @default(CLIENTE)
+  activo        Boolean  @default(true)
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  empleado         Empleado?
+  citasComoCliente Cita[]    @relation("CitaCliente")
+  citasRegistradas Cita[]    @relation("CitaRegistradaPor")
+}
+
+model Especialidad {
+  id          String  @id @default(uuid())
+  nombre      String  @unique
+  descripcion String?
+
+  empleados Empleado[]
+}
+
+model Empleado {
+  id             String  @id @default(uuid())
+  usuarioId      String  @unique
+  especialidadId String?
+  bio            String? @db.Text
+  fotoUrl        String?
+  activo         Boolean @default(true)
+
+  usuario       Usuario              @relation(fields: [usuarioId], references: [id])
+  especialidad  Especialidad?        @relation(fields: [especialidadId], references: [id])
+  servicios     Servicio[]           @relation("EmpleadoServicios")
+  citas         Cita[]
+  restricciones RestriccionHorario[]
+}
+
+model Servicio {
+  id              String  @id @default(uuid())
+  nombre          String
+  descripcion     String? @db.Text
+  duracionMinutos Int
+  precio          Decimal @db.Decimal(10, 2)
+  imagenUrl       String?
+  activo          Boolean @default(true)
+
+  empleados Empleado[] @relation("EmpleadoServicios")
+  citas     Cita[]
+}
+
+/// Complemento que suma costo pero nunca duracion.
+model ServicioAdicional {
+  id          String  @id @default(uuid())
+  nombre      String
+  descripcion String?
+  precio      Decimal @db.Decimal(10, 2)
+  activo      Boolean @default(true)
+
+  citas CitaAdicional[]
+}
+
+/// Catalogo de estados. Los indicadores deciden que se puede hacer con una cita:
+/// esta tabla es configuracion critica, no datos de referencia.
+model EstadoCita {
+  id                         String  @id @default(uuid())
+  codigo                     String  @unique
+  nombre                     String
+  /// Si es true, una cita en este estado ocupa el espacio del empleado.
+  bloqueaDisponibilidad      Boolean @default(true)
+  permiteEdicion             Boolean @default(true)
+  /// Separados a proposito: con un solo indicador, una cita Confirmada no la podia
+  /// cancelar nadie, ni el administrador (deuda ESC-03 del sistema anterior).
+  permiteCancelacionCliente  Boolean @default(false)
+  permiteCancelacionPersonal Boolean @default(true)
+  esFinal                    Boolean @default(false)
+  orden                      Int     @default(0)
+
+  citas Cita[]
+}
+
+/// Franja de atencion del negocio. Varias filas por dia permiten turnos partidos.
+model HorarioAtencion {
+  id             String    @id @default(uuid())
+  dia            DiaSemana
+  minutoApertura Int
+  minutoCierre   Int
+  activo         Boolean   @default(true)
+
+  @@unique([dia, minutoApertura])
+}
+
+/// Bloqueo puntual. empleadoId nulo = aplica a todo el negocio.
+model RestriccionHorario {
+  id         String          @id @default(uuid())
+  tipo       TipoRestriccion
+  empleadoId String?
+  inicio     DateTime
+  fin        DateTime
+  motivo     String?
+
+  empleado Empleado? @relation(fields: [empleadoId], references: [id])
+
+  @@index([empleadoId, inicio, fin])
+  @@index([inicio, fin])
+}
+
+model Cita {
+  id              String @id @default(uuid())
+  clienteId       String
+  /// Quien la digito. Distinto de clienteId cuando el personal reserva a nombre de alguien.
+  registradaPorId String
+  empleadoId      String
+  servicioId      String
+  estadoId        String
+
+  inicio DateTime
+  fin    DateTime
+  /// Espejo de `inicio` mientras el estado bloquea disponibilidad; NULL cuando no.
+  /// MySQL admite NULLs repetidos en un indice unico, asi que una cita cancelada
+  /// libera el espacio mientras la fila sobrevive. Ver spec/02.
+  slotOcupado DateTime?
+
+  /// Copias al momento de reservar. Las calcula el servidor, nunca el cliente.
+  precioServicio   Decimal @db.Decimal(10, 2)
+  costoAdicionales Decimal @default(0) @db.Decimal(10, 2)
+  costoTotal       Decimal @db.Decimal(10, 2)
+
+  motivoCancelacion String?  @db.VarChar(255)
+  notas             String?  @db.Text
+  creadaEn          DateTime @default(now())
+  actualizadaEn     DateTime @updatedAt
+
+  cliente       Usuario         @relation("CitaCliente", fields: [clienteId], references: [id])
+  registradaPor Usuario         @relation("CitaRegistradaPor", fields: [registradaPorId], references: [id])
+  empleado      Empleado        @relation(fields: [empleadoId], references: [id])
+  servicio      Servicio        @relation(fields: [servicioId], references: [id])
+  estado        EstadoCita      @relation(fields: [estadoId], references: [id])
+  adicionales   CitaAdicional[]
+
+  @@unique([empleadoId, slotOcupado])
+  @@index([empleadoId, inicio, fin])
+  @@index([clienteId, inicio])
+}
+
+/// Join explicito para congelar el precio del adicional al momento de reservar.
+model CitaAdicional {
+  citaId      String
+  adicionalId String
+  precio      Decimal @db.Decimal(10, 2)
+
+  cita      Cita              @relation(fields: [citaId], references: [id], onDelete: Cascade)
+  adicional ServicioAdicional @relation(fields: [adicionalId], references: [id])
+
+  @@id([citaId, adicionalId])
 }

@@ -8,10 +8,11 @@ Spec de como se organiza el frontend a partir de ahora. El backend/contrato de A
 src/
   components/
     layout/   # chrome de la app: Navbar, Footer, AppLayout. Uno de cada uno, no reusable entre paginas.
-    ui/       # primitivas presentacionales reusables: Button, Card, Spinner, EmptyState, PageHeader.
+    ui/       # primitivas presentacionales reusables: Button, ButtonLink, Card, Modal, Thumbnail, CardDetailIcon, ServicioCard, EspecialistaCard, Spinner, EmptyState, PageHeader.
   pages/      # una carpeta por dominio, un archivo por ruta. Mirror del backend (auth/, citas/, gestion/<dominio>/, publico/, sistema/).
   routes/     # guards de routing (ProtectedRoute, RoleRoute).
   services/   # una funcion por endpoint de backend, agrupadas por dominio. Unico lugar que llama apiClient.
+  lib/        # helpers puros sin JSX (formatPrice, formatDuration, especialista) y configuracionPlaceholder (unico lugar con valores de negocio fijos hasta que exista GET /configuracion).
   context/    # estado cross-cutting (AuthContext).
   api/        # client.ts, el unico fetch wrapper.
 ```
@@ -50,7 +51,7 @@ Componentes/paginas nunca llaman `fetch` ni `apiClient` directo — siempre a tr
 
 Este frontend es generico a cualquier negocio de citas/reservas (salon, clinica, consultoria, etc.), no a un servicio en especifico. No hardcodear copy ni secciones atadas a un rubro puntual — el Home, el navbar y las paginas publicas deben funcionar igual sin importar que tipo de "servicio" se agende.
 
-Navbar publico (siempre visible, sin gate): **Inicio** (`/`), **Servicios** (`/servicios`), **Equipo** (`/equipo`), **Reservar** (`/citas/reservar`). `Reservar` cuelga de `ProtectedRoute`, asi que a un invitado lo manda a `/auth/login` — es el comportamiento esperado, no un bug.
+Navbar publico (siempre visible, sin gate): **Inicio** (`/`), **Equipo** (`/equipo`), **Reservar** (`/citas/reservar`). `Servicios` no tiene link propio en el nav — spec 07 muestra los servicios anidados por especialista dentro de `/equipo`, y `/servicios` (catalogo completo) sigue existiendo como ruta, solo que no colgada del nav. `Reservar` cuelga de `ProtectedRoute`, asi que a un invitado lo manda a `/auth/login` — es el comportamiento esperado, no un bug. Bajo `md` los links colapsan en un menu hamburguesa (`Navbar.tsx`).
 
 `pages/publico/ServiciosPage.tsx` es el catalogo publico de servicios (para cualquier visitante). Es una pagina distinta de `pages/gestion/servicios/ServiciosListPage.tsx`, que es la vista de administracion (alta/edicion, solo admin/empleado). No fusionar ambas — sirven audiencias y permisos distintos aunque el dominio de datos sea el mismo.
 
