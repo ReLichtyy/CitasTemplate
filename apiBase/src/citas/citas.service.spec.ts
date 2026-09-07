@@ -5,6 +5,7 @@ import { CitasService } from './citas.service.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface.js';
 import type { ReservarCitaDto } from './dto/reservar-cita.dto.js';
+import type { OutboxService } from '../notificaciones/outbox.service.js';
 
 // 2026-09-07 es lunes. 10:00 UTC = minuto 600, dentro de la franja 09:00-18:00.
 const INICIO = '2026-09-07T10:00:00.000Z';
@@ -154,11 +155,22 @@ function crearPrisma() {
   return { prisma: prisma as unknown as PrismaService, tx };
 }
 
+/**
+ * Notificaciones falsas. La reserva las llama dentro de su transaccion, y lo unico
+ * que estas pruebas quieren saber de ellas es eso: que reciben el mismo `tx`. Lo que
+ * hagan de verdad es asunto de 09-conexion-whatsapp.md.
+ */
+function crearServicio(prisma: PrismaService) {
+  const outbox = { encolarConfirmacion: vi.fn().mockResolvedValue(true) };
+  const servicio = new CitasService(prisma, outbox as unknown as OutboxService);
+  return { servicio, outbox };
+}
+
 describe('CitasService.reservar', () => {
   it('calcula el fin con la duracion del servicio y ocupa el slot', async () => {
     const { prisma, tx } = crearPrisma();
 
-    await new CitasService(prisma).reservar(dtoBase, CLIENTE);
+    await crearServicio(prisma).servicio.reservar(dtoBase, CLIENTE);
 
     const { data } = tx.cita.create.mock.calls[0][0];
     expect(data.fin.toISOString()).toBe('2026-09-07T11:00:00.000Z');
@@ -174,7 +186,7 @@ describe('CitasService.reservar', () => {
       { id: 'ad-2', precio: new Prisma.Decimal('4.50'), activo: true },
     ]);
 
-    await new CitasService(prisma).reservar(
+    await crearServicio(prisma).servicio.reservar(
       { ...dtoBase, adicionalIds: ['ad-1', 'ad-2'] },
       CLIENTE,
     );
@@ -189,7 +201,7 @@ describe('CitasService.reservar', () => {
 
   it('rechaza un horario fuera de la franja de atencion', async () => {
     const { prisma } = crearPrisma();
-    const servicio = new CitasService(prisma);
+    const { servicio } = crearServicio(prisma);
 
     // 17:30 + 60 min = 18:30, pasado el cierre.
     await expect(
@@ -205,7 +217,7 @@ describe('CitasService.reservar', () => {
     tx.horarioAtencion.findMany.mockResolvedValue([]);
 
     await expect(
-      new CitasService(prisma).reservar(dtoBase, CLIENTE),
+      crearServicio(prisma).servicio.reservar(dtoBase, CLIENTE),
     ).rejects.toThrow('no atiende ese dia');
   });
 
@@ -214,7 +226,7 @@ describe('CitasService.reservar', () => {
     tx.cita.findFirst.mockResolvedValue({ id: 'cita-existente' });
 
     await expect(
-      new CitasService(prisma).reservar(dtoBase, CLIENTE),
+      crearServicio(prisma).servicio.reservar(dtoBase, CLIENTE),
     ).rejects.toThrow('Ese horario ya esta tomado');
 
     // Solo cuentan los estados que bloquean disponibilidad, y solo ese empleado.
@@ -229,7 +241,7 @@ describe('CitasService.reservar', () => {
     tx.restriccionHorario.findFirst.mockResolvedValue({ id: 'res-1' });
 
     await expect(
-      new CitasService(prisma).reservar(dtoBase, CLIENTE),
+      crearServicio(prisma).servicio.reservar(dtoBase, CLIENTE),
     ).rejects.toThrow('bloqueado en la agenda');
 
     // Cuenta la restriccion general (empleadoId nulo) tanto como la del empleado.
@@ -247,7 +259,7 @@ describe('CitasService.reservar', () => {
     });
 
     await expect(
-      new CitasService(prisma).reservar(dtoBase, CLIENTE),
+      crearServicio(prisma).servicio.reservar(dtoBase, CLIENTE),
     ).rejects.toThrow('no realiza ese servicio');
   });
 
@@ -262,7 +274,7 @@ describe('CitasService.reservar', () => {
       }),
     );
 
-    const promesa = new CitasService(prisma).reservar(dtoBase, CLIENTE);
+    const promesa = crearServicio(prisma).servicio.reservar(dtoBase, CLIENTE);
     await expect(promesa).rejects.toBeInstanceOf(ConflictException);
     await expect(promesa).rejects.toThrow('Ese horario ya esta tomado');
   });
@@ -270,7 +282,7 @@ describe('CitasService.reservar', () => {
   it('ignora el clienteId que manda un CLIENTE y reserva a su nombre', async () => {
     const { prisma, tx } = crearPrisma();
 
-    await new CitasService(prisma).reservar(
+    await crearServicio(prisma).servicio.reservar(
       { ...dtoBase, clienteId: 'usr-ajeno' },
       CLIENTE,
     );
@@ -283,7 +295,7 @@ describe('CitasService.reservar', () => {
   it('deja que el personal reserve a nombre de otro sin perder quien digito', async () => {
     const { prisma, tx } = crearPrisma();
 
-    await new CitasService(prisma).reservar(
+    await crearServicio(prisma).servicio.reservar(
       { ...dtoBase, clienteId: 'usr-cli' },
       ADMIN,
     );
@@ -302,7 +314,7 @@ describe('CitasService.reservar sin sesion', () => {
   it('exige los datos de contacto cuando no hay token', async () => {
     const { prisma } = crearPrisma();
 
-    await expect(new CitasService(prisma).reservar(dtoBase)).rejects.toThrow(
+    await expect(crearServicio(prisma).servicio.reservar(dtoBase)).rejects.toThrow(
       'datos de contacto',
     );
   });
@@ -310,7 +322,7 @@ describe('CitasService.reservar sin sesion', () => {
   it('crea la ficha del invitado con el telefono normalizado y sin contrasena', async () => {
     const { prisma, tx } = crearPrisma();
 
-    await new CitasService(prisma).reservar({ ...dtoBase, ...datosInvitado });
+    await crearServicio(prisma).servicio.reservar({ ...dtoBase, ...datosInvitado });
 
     const { data } = tx.usuario.create.mock.calls[0][0];
     // Sin normalizar, el mismo numero escrito de otra forma crearia un cliente nuevo.
@@ -333,7 +345,7 @@ describe('CitasService.reservar sin sesion', () => {
           : { id: where.id, activo: true },
     );
 
-    await new CitasService(prisma).reservar({ ...dtoBase, ...datosInvitado });
+    await crearServicio(prisma).servicio.reservar({ ...dtoBase, ...datosInvitado });
 
     expect(tx.usuario.create).not.toHaveBeenCalled();
     expect(tx.cita.create.mock.calls[0][0].data.clienteId).toBe(
@@ -350,7 +362,7 @@ describe('CitasService.reservar sin sesion', () => {
           : { id: where.id, activo: true },
     );
 
-    const comprobante = await new CitasService(prisma).reservar({
+    const comprobante = await crearServicio(prisma).servicio.reservar({
       ...dtoBase,
       ...datosInvitado,
     });
@@ -368,7 +380,7 @@ describe('CitasService.update', () => {
     const { prisma, tx } = crearPrisma();
     tx.cita.findUnique.mockResolvedValue(CITA_GUARDADA);
 
-    await new CitasService(prisma).update(
+    await crearServicio(prisma).servicio.update(
       'cita-1',
       { inicio: '2026-09-07T12:00:00.000Z' },
       ADMIN,
@@ -386,7 +398,7 @@ describe('CitasService.update', () => {
     const { prisma, tx } = crearPrisma();
     tx.cita.findUnique.mockResolvedValue(CITA_GUARDADA);
 
-    await new CitasService(prisma).update(
+    await crearServicio(prisma).servicio.update(
       'cita-1',
       { estadoCodigo: 'CANCELADA' },
       ADMIN,
@@ -411,7 +423,7 @@ describe('CitasService.cancelar', () => {
       estado: PENDIENTE,
     });
 
-    await new CitasService(prisma).cancelar(
+    await crearServicio(prisma).servicio.cancelar(
       'cita-1',
       { motivo: 'imprevisto' },
       CLIENTE,
@@ -458,7 +470,7 @@ describe('CitasService.findAll', () => {
     const { prisma, tx } = crearPrisma();
     tx.empleado.findUnique.mockResolvedValue(null);
 
-    await new CitasService(prisma).findAll({
+    await crearServicio(prisma).servicio.findAll({
       userId: 'usr-emp',
       telefono: '88880003',
       rol: Role.EMPLEADO,
@@ -466,5 +478,18 @@ describe('CitasService.findAll', () => {
 
     // Un `where` vacio aqui le enseñaria la agenda de todo el mundo.
     expect(tx.cita.findMany.mock.calls[0][0].where).toEqual({ id: { in: [] } });
+  });
+});
+
+describe('CitasService.reservar · outbox', () => {
+  it('encola el aviso dentro de la misma transaccion que crea la cita', async () => {
+    const { prisma, tx } = crearPrisma();
+    const { servicio, outbox } = crearServicio(prisma);
+
+    await servicio.reservar(dtoBase, CLIENTE);
+
+    // El mismo cliente transaccional: si aqui llegara `prisma`, el INSERT del outbox
+    // quedaria fuera de la transaccion y una reserva revertida dejaria un aviso vivo.
+    expect(outbox.encolarConfirmacion).toHaveBeenCalledWith(tx, 'cita-1');
   });
 });

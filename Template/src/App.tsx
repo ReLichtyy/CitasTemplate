@@ -8,6 +8,7 @@ import { PerfilPage } from './pages/auth/PerfilPage';
 import { CitasListPage } from './pages/citas/CitasListPage';
 import { AgendaPage } from './pages/citas/AgendaPage';
 import { ReservarPage } from './pages/citas/ReservarPage';
+import { ConfirmarCitaPage } from './pages/citas/ConfirmarCitaPage';
 import { EditarCitaPage } from './pages/citas/EditarCitaPage';
 import { DetalleCitaPage } from './pages/citas/DetalleCitaPage';
 import { ServiciosListPage } from './pages/gestion/servicios/ServiciosListPage';
@@ -38,6 +39,11 @@ function App() {
         {/* Reservar es publico: se agenda como invitado dando el telefono. La cita se
             crea igual en el servidor, que sigue siendo quien decide de quien es. */}
         <Route path="/citas/reservar" element={<ReservarPage />} />
+        {/* Publica y **antes** de las rutas con sesion: quien llega por el enlace del
+            WhatsApp no la tiene. La pagina solo muestra la cita; confirmar es un POST,
+            porque un GET lo dispararia la vista previa del propio WhatsApp.
+            Ver apiBase/src/notificaciones/09-conexion-whatsapp.md. */}
+        <Route path="/citas/confirmar/:token" element={<ConfirmarCitaPage />} />
 
         {/* auth */}
         <Route path="/auth/login" element={<LoginPage />} />

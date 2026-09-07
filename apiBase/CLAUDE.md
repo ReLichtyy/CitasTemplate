@@ -36,6 +36,9 @@ backend; los specs de cada módulo (`prisma/01-…`, `src/citas/02-…`, `src/au
 - `Cita.slotOcupado` es espejo de `inicio` mientras el estado bloquee disponibilidad, y
   `NULL` cuando no. Todo cambio de estado lo mantiene, en la misma transacción.
 - Verificar e insertar una cita van dentro de una `$transaction`.
+- Ninguna llamada de red va dentro de una `$transaction`. Lo que entra es la intencion
+  —una fila en `NotificacionSalida`—; el envio lo hace el worker despues y reintenta.
+  Un aviso que falla no puede reventar una reserva valida.
 - Las horas del día son minutos desde medianoche; los instantes absolutos son `DateTime`.
 
 ## Rutas abiertas

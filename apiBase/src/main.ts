@@ -16,7 +16,12 @@ import { SobreInterceptor } from './common/interceptors/sobre.interceptor.js';
 const LIMITE_CUERPO = '64kb';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // `rawBody` guarda el cuerpo sin parsear. La firma HMAC del webhook de WhatsApp se
+  // calcula sobre esos bytes exactos: recalcularla sobre el JSON re-serializado cambia
+  // espacios y orden de claves, y entonces ninguna firma legitima coincide.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
   const logger = new Logger('Bootstrap');
   const esProduccion = process.env.NODE_ENV === 'production';
 

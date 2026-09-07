@@ -1,137 +1,59 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Alert } from '../../components/ui/Alert';
 import { ButtonLink } from '../../components/ui/ButtonLink';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { EspecialistaCard } from '../../components/ui/EspecialistaCard';
 import { Modal } from '../../components/ui/Modal';
 import { ServicioCard } from '../../components/ui/ServicioCard';
+import { Spinner } from '../../components/ui/Spinner';
 import { StarIcon } from '../../components/ui/StarIcon';
 import { Thumbnail } from '../../components/ui/Thumbnail';
+import { useRecursoApi } from '../../hooks/useRecursoApi';
 import { configuracionPlaceholder } from '../../lib/configuracionPlaceholder';
-import { iniciales, nombreCompleto } from '../../lib/especialista';
+import { aEspecialista, iniciales, nombreCompleto } from '../../lib/especialista';
 import { formatDuration } from '../../lib/formatDuration';
 import { formatFecha } from '../../lib/formatFecha';
 import { formatPrice } from '../../lib/formatPrice';
+import { empleadosService } from '../../services/empleadosService';
+import { serviciosService } from '../../services/serviciosService';
 import type { Especialista, Servicio } from '../../types/catalogo';
-
-// TODO(spec 08): reemplazar por empleadosService.listPublico() y
-// serviciosService.listPublico() cuando esos endpoints publicos existan (spec 03).
-// Son dos peticiones independientes: cada seccion resuelve su propio Spinner/EmptyState.
-// OJO: el rating y las resenas NO existen todavia en prisma/schema.prisma — hace falta un
-// modelo Resena (autor, puntuacion, comentario, fecha, empleadoId) y que el endpoint
-// publico devuelva el promedio y las ultimas tres ya calculados.
-// Las filas sin imagen / sin rating estan a proposito, para ver los caminos vacios.
-const ESPECIALISTAS: Especialista[] = [
-  {
-    id: '1',
-    nombre: 'Joshua',
-    apellido: 'Calero',
-    especialidad: 'Barbero senior',
-    fotoUrl: 'https://picsum.photos/seed/joshua/240/240',
-    bio: 'Diez anios detras de la silla. Trabaja cortes clasicos y degradados, y atiende con cita previa de martes a sabado.',
-    rating: {
-      promedio: 4.8,
-      total: 24,
-      ultimasResenas: [
-        {
-          id: 'r1',
-          autor: 'Marcela V.',
-          puntuacion: 5,
-          comentario: 'Puntual y muy prolijo. Explico que corte me quedaba mejor antes de empezar.',
-          fecha: '2026-08-28',
-        },
-        {
-          id: 'r2',
-          autor: 'Diego S.',
-          puntuacion: 5,
-          comentario: 'El degradado quedo perfecto. Ya es la tercera vez que vuelvo.',
-          fecha: '2026-08-14',
-        },
-        {
-          id: 'r3',
-          autor: 'Karla M.',
-          puntuacion: 4,
-          comentario: 'Muy buen resultado, aunque la cita arranco unos minutos tarde.',
-          fecha: '2026-07-30',
-        },
-      ],
-    },
-  },
-  {
-    id: '2',
-    nombre: 'Ana',
-    apellido: 'Martinez',
-    especialidad: 'Colorista',
-    fotoUrl: 'https://picsum.photos/seed/ana/240/240',
-    bio: 'Especialista en color y mechas. Hace diagnostico previo del cabello antes de proponer un tratamiento.',
-    rating: {
-      promedio: 4.9,
-      total: 31,
-      ultimasResenas: [
-        {
-          id: 'r4',
-          autor: 'Lucia R.',
-          puntuacion: 5,
-          comentario: 'Me asesoro con el tono y acerto. El pelo quedo sanisimo.',
-          fecha: '2026-09-01',
-        },
-        {
-          id: 'r5',
-          autor: 'Pablo N.',
-          puntuacion: 5,
-          comentario: 'Hizo prueba de mecha antes de aplicar. Se nota el cuidado.',
-          fecha: '2026-08-22',
-        },
-        {
-          id: 'r6',
-          autor: 'Sofia T.',
-          puntuacion: 4,
-          comentario: 'Excelente color. La sesion fue larga, pero avisado desde el inicio.',
-          fecha: '2026-08-05',
-        },
-      ],
-    },
-  },
-  {
-    id: '3',
-    nombre: 'Luis',
-    apellido: 'Rojas',
-    especialidad: null,
-    fotoUrl: null,
-    bio: null,
-    rating: null,
-  },
-];
-
-const SERVICIOS: Servicio[] = [
-  {
-    id: '1',
-    nombre: 'Corte y peinado',
-    duracionMinutos: 45,
-    precio: '12500',
-    imagenUrl: 'https://picsum.photos/seed/corte/640/360',
-    descripcion:
-      'Lavado, corte a tijera o maquina y peinado final. Incluye asesoria de mantenimiento.',
-  },
-  {
-    id: '2',
-    nombre: 'Coloracion completa',
-    duracionMinutos: 120,
-    precio: '35000',
-    imagenUrl: 'https://picsum.photos/seed/color/640/360',
-    descripcion:
-      'Aplicacion de color en todo el cabello, con prueba de mecha previa y tratamiento posterior.',
-  },
-  {
-    id: '3',
-    nombre: 'Barba',
-    duracionMinutos: 20,
-    precio: '6000',
-    imagenUrl: null,
-    descripcion: null,
-  },
-];
 
 // 08-pagina-especialistas.md: las dos rejillas son la misma a proposito. Una sola constante lo garantiza.
 const GRID_CLASSES = 'stagger-in grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3';
+
+/**
+ * Los tres caminos de una seccion que viene del API, en un solo lugar: cargando, error y
+ * catalogo vacio. Cada seccion los resuelve por su cuenta —son dos peticiones
+ * independientes— y sin esto cada una los escribiria a su manera.
+ */
+function EstadoSeccion({
+  cargando,
+  error,
+  vacio,
+  tituloVacio,
+  children,
+}: {
+  cargando: boolean;
+  error: string | null;
+  vacio: boolean;
+  tituloVacio: string;
+  children: ReactNode;
+}) {
+  if (cargando) {
+    return (
+      <div className="flex justify-center py-8">
+        <Spinner />
+      </div>
+    );
+  }
+  if (error) {
+    return <Alert>{error}</Alert>;
+  }
+  if (vacio) {
+    return <EmptyState title={tituloVacio} description="Vuelva a intentarlo mas tarde." />;
+  }
+  return <>{children}</>;
+}
 
 // Encabezado de seccion: centrado, con una regla de acento corta debajo. Las dos
 // secciones lo comparten para que se lean como parte de la misma pagina.
@@ -158,35 +80,57 @@ export function EquipoPage() {
   const [especialista, setEspecialista] = useState<Especialista | null>(null);
   const [servicio, setServicio] = useState<Servicio | null>(null);
 
+  // Dos peticiones independientes a proposito: que el catalogo de servicios tarde o falle
+  // no debe dejar en blanco la seccion de especialistas, que ya podria estar lista.
+  const empleados = useRecursoApi(() => empleadosService.list());
+  const servicios = useRecursoApi(() => serviciosService.list());
+
+  const especialistas = (empleados.datos ?? []).map(aEspecialista);
+  const catalogo = servicios.datos ?? [];
+
   return (
     <div className="flex flex-col gap-16 py-6 sm:gap-24 sm:py-10">
       <section className="flex flex-col gap-8 sm:gap-10">
         <SeccionHeader nivel={1}>{terminoEmpleadoPlural}</SeccionHeader>
-        <div className={GRID_CLASSES}>
-          {ESPECIALISTAS.map((item) => (
-            <EspecialistaCard
-              key={item.id}
-              especialista={item}
-              onSelect={() => setEspecialista(item)}
-            />
-          ))}
-        </div>
+        <EstadoSeccion
+          cargando={empleados.cargando}
+          error={empleados.error}
+          vacio={especialistas.length === 0}
+          tituloVacio={`Todavia no hay ${terminoEmpleadoPlural.toLowerCase()} publicados.`}
+        >
+          <div className={GRID_CLASSES}>
+            {especialistas.map((item) => (
+              <EspecialistaCard
+                key={item.id}
+                especialista={item}
+                onSelect={() => setEspecialista(item)}
+              />
+            ))}
+          </div>
+        </EstadoSeccion>
       </section>
 
       {/* scroll-mt deja aire bajo la navbar fija cuando se entra por #servicios. */}
       <section id="servicios" className="flex scroll-mt-24 flex-col gap-8 sm:gap-10">
         <SeccionHeader nivel={2}>{terminoServicioPlural}</SeccionHeader>
-        <div className={GRID_CLASSES}>
-          {SERVICIOS.map((item) => (
-            <ServicioCard
-              key={item.id}
-              servicio={item}
-              moneda={moneda}
-              locale={locale}
-              onSelect={() => setServicio(item)}
-            />
-          ))}
-        </div>
+        <EstadoSeccion
+          cargando={servicios.cargando}
+          error={servicios.error}
+          vacio={catalogo.length === 0}
+          tituloVacio={`Todavia no hay ${terminoServicioPlural.toLowerCase()} publicados.`}
+        >
+          <div className={GRID_CLASSES}>
+            {catalogo.map((item) => (
+              <ServicioCard
+                key={item.id}
+                servicio={item}
+                moneda={moneda}
+                locale={locale}
+                onSelect={() => setServicio(item)}
+              />
+            ))}
+          </div>
+        </EstadoSeccion>
       </section>
 
       <Modal

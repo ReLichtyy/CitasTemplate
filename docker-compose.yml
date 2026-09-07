@@ -12,7 +12,7 @@ services:
     container_name: citas-db
     restart: unless-stopped
     environment:
-      MARIADB_ROOT_PASSWORD: dev
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-dev}
       MARIADB_DATABASE: citas_template
     ports:
       # Solo loopback: la base nunca se expone a la red, ni aqui ni en el VPS.
@@ -25,5 +25,46 @@ services:
       timeout: 5s
       retries: 20
 
+  # WAHA - WhatsApp HTTP API. Ver apiBase/src/notificaciones/09-conexion-whatsapp.md.
+  #
+  # Maneja una sesion real de WhatsApp Web. El riesgo de baneo cae sobre el numero
+  # que se escanee aqui, asi que ese numero es dedicado y desechable, nunca el
+  # principal del negocio.
+  waha:
+    image: devlikeapro/waha:latest-2026.8.2
+    container_name: citas-waha
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # WAHA escucha en 3000 adentro del contenedor, igual que el API de citas en el
+      # host. No chocan porque afuera se publica en 3001; adentro nadie mas usa 3000.
+      WHATSAPP_API_KEY: ${WAHA_API_KEY}
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD}
+      # Al reiniciar el contenedor, las sesiones vuelven solas desde el volumen. Sin
+      # esto habria que arrancarlas a mano despues de cada despliegue.
+      WHATSAPP_RESTART_ALL_SESSIONS: "True"
+      WHATSAPP_DEFAULT_ENGINE: WEBJS
+      # Webhook hacia el API. El controlador ya existe: src/integrations/waha/.
+      # En el VPS esta URL es la interna del API; el webhook no necesita salir a internet.
+      WHATSAPP_HOOK_URL: http://host.docker.internal:3000/webhooks/whatsapp
+      # Nada de `*`: cada evento suscrito es una peticion que el API tiene que atender y
+      # descartar. `message` es la comodidad futura de responder por texto; `message.ack`
+      # es lo que marca un aviso como entregado.
+      WHATSAPP_HOOK_EVENTS: message,message.ack
+      # Sin esta firma el API rechaza el webhook entero: la ruta es publica por fuerza.
+      WHATSAPP_HOOK_HMAC_KEY: ${WAHA_HOOK_HMAC_KEY}
+    ports:
+      # Solo loopback, y 3001 afuera para no chocar con el API de citas.
+      # En el VPS esta linea se borra: WAHA queda en la red interna y nada mas.
+      - "127.0.0.1:3001:3000"
+    volumes:
+      # La sesion de WhatsApp. Perder este volumen es volver a escanear el QR.
+      - waha-sessions:/app/.sessions
+    extra_hosts:
+      # Para que WAHA alcance el API que corre en el host durante desarrollo.
+      - "host.docker.internal:host-gateway"
+
 volumes:
   citas-db-data:
+  waha-sessions:

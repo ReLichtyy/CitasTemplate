@@ -89,3 +89,22 @@ quita es el enlace del navbar, no la ruta — el detalle `/servicios/:id` cuelga
 360, 768 y 1280 px. En 360: nombres largos de especialista con `line-clamp-2`, iniciales
 legibles, chevrones alineados en ambas rejillas, y las dos secciones claramente separadas al
 hacer scroll. Sin scroll horizontal.
+
+## Estado · conectado a la base
+
+Las dos secciones salen de `GET /empleados` y `GET /servicios`, en **dos peticiones
+independientes**: que el catalogo de servicios tarde o falle no deja en blanco la seccion de
+especialistas, que puede estar lista. Cada seccion resuelve su propio cargando / error /
+vacio (`EstadoSeccion` en la misma pagina).
+
+El `rating` ya no es inventado: existe el modelo `Resena` (`prisma/schema.prisma`) y
+`EmpleadosService` devuelve promedio, total y las tres ultimas **ya calculados**. Dos cosas
+que se decidieron ahi y esta pagina asume:
+
+- Solo salen las resenas con `publicada: true`. Una resena existe desde que se escribe, pero
+  entra al catalogo cuando alguien la aprueba.
+- Sin resenas publicadas, `rating` es **null** y no un cero: cero se lee como mala
+  calificacion, y "sin opiniones todavia" no es eso. La card lo distingue.
+
+Falta el flujo que **crea** resenas. Cuando exista debe colgar de una cita atendida — sin
+eso, nada impide que la misma persona opine diez veces.

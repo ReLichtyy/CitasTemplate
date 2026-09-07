@@ -56,6 +56,10 @@ model ConfiguracionNegocio {
   locale                String   @default("es")
   /// Debe configurarse por despliegue. Toda hora se interpreta en esta zona.
   zonaHoraria           String   @default("UTC")
+  /// Prefijo internacional con "+", p. ej. "+506". Se le antepone a todo telefono
+  /// guardado en forma local antes de mandarlo a un canal externo: un numero como
+  /// "88887777" no se entrega a ningun lado. Ver 09-conexion-whatsapp.md.
+  prefijoPais           String?
   actualizadoEn         DateTime @updatedAt
 }
 
@@ -72,6 +76,11 @@ model Usuario {
   apellido      String?
   rol           Rol      @default(CLIENTE)
   activo        Boolean  @default(true)
+  /// Opt-in explicito para avisos por WhatsApp. Sin el no sale un solo mensaje: es
+  /// politica de WhatsApp y es lo que sostiene la reputacion del numero.
+  aceptaWhatsapp   Boolean  @default(false)
+  /// Cuando se dio ese consentimiento. Sin fecha, el opt-in no es demostrable.
+  aceptaWhatsappEn DateTime?
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
 
@@ -101,6 +110,35 @@ model Empleado {
   servicios     Servicio[]           @relation("EmpleadoServicios")
   citas         Cita[]
   restricciones RestriccionHorario[]
+  resenas       Resena[]
+}
+
+/// Opinion publica sobre un empleado.
+///
+/// El autor es un **nombre suelto**, no un `Usuario`: la resena sobrevive a la baja de la
+/// ficha de quien la escribio, y el catalogo publico no debe poder usarse para averiguar
+/// quien es cliente del negocio. La contrapartida asumida: nada impide dos resenas del
+/// mismo cliente hasta que exista el flujo que las crea, que es el que debera atarlas a
+/// una cita atendida.
+///
+/// `publicada` es el interruptor de moderacion: una resena existe desde que se escribe,
+/// pero solo sale al catalogo cuando alguien la aprueba. Por defecto no sale.
+model Resena {
+  id         String   @id @default(uuid())
+  empleadoId String
+  autor      String   @db.VarChar(80)
+  /// 1..5. El rango lo valida el DTO; la base solo guarda el entero.
+  puntuacion Int
+  comentario String   @db.Text
+  /// Cuando se vivio la experiencia, no cuando se digito la fila.
+  fecha      DateTime
+  publicada  Boolean  @default(false)
+  creadaEn   DateTime @default(now())
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  /// El catalogo publico siempre lee "las publicadas de este empleado, por fecha".
+  @@index([empleadoId, publicada, fecha])
 }
 
 model Servicio {
@@ -204,6 +242,8 @@ model Cita {
   servicio      Servicio        @relation(fields: [servicioId], references: [id])
   estado        EstadoCita      @relation(fields: [estadoId], references: [id])
   adicionales   CitaAdicional[]
+  notificaciones    NotificacionSalida[]
+  tokenConfirmacion TokenConfirmacion?
 
   @@unique([empleadoId, slotOcupado])
   @@index([empleadoId, inicio, fin])
@@ -220,4 +260,88 @@ model CitaAdicional {
   adicional ServicioAdicional @relation(fields: [adicionalId], references: [id])
 
   @@id([citaId, adicionalId])
+}
+
+// ─── Notificaciones ──────────────────────────────────────────────────────────
+// Ver src/notificaciones/09-conexion-whatsapp.md.
+
+enum CanalNotificacion {
+  WHATSAPP
+}
+
+enum TipoNotificacion {
+  CONFIRMACION_CITA
+  RECORDATORIO_CITA
+  CANCELACION_CITA
+}
+
+enum EstadoNotificacion {
+  PENDIENTE
+  ENVIANDO
+  ENVIADA
+  FALLIDA
+}
+
+/// Outbox. La intencion de enviar se escribe dentro de la transaccion que crea o
+/// cambia la cita; el envio real lo hace el worker, despues y fuera de ella. Meter
+/// la llamada HTTP en la transaccion le regalaria la latencia de WhatsApp a la tasa
+/// de conflictos de reserva, y un envio fallido reventaria una reserva valida.
+model NotificacionSalida {
+  id     String            @id @default(uuid())
+  citaId String
+  tipo   TipoNotificacion
+  canal  CanalNotificacion @default(WHATSAPP)
+
+  /// Copia congelada del telefono al momento de encolar, igual que
+  /// `Cita.precioServicio`. Si el cliente cambia de numero despues, el mensaje ya
+  /// encolado no debe salir a un destino que nadie eligio.
+  destino   String
+  variables Json
+
+  estado           EstadoNotificacion @default(PENDIENTE)
+  intentos         Int                @default(0)
+  proximoIntentoEn DateTime           @default(now())
+  ultimoError      String?            @db.Text
+  /// Id del mensaje que devuelve el gateway. Es lo que permite conciliar un acuse de
+  /// entrega (`message.ack`) con la fila que lo origino.
+  idExterno        String?
+  enviadaEn        DateTime?
+  /// La marca el acuse de entrega del canal, no el envio. Una fila ENVIADA sin
+  /// entrega es informacion operativa: el numero puede no tener WhatsApp.
+  entregadaEn      DateTime?
+  creadaEn         DateTime           @default(now())
+
+  cita Cita @relation(fields: [citaId], references: [id], onDelete: Cascade)
+
+  /// Idempotencia. Una confirmacion por cita, y no mas: sin esto un reintento del
+  /// lado del API o un doble clic encolan dos mensajes al mismo numero.
+  @@unique([citaId, tipo])
+  @@index([estado, proximoIntentoEn])
+  @@index([idExterno])
+}
+
+/// Token del enlace de confirmacion. En la base vive solo el hash: quien lea la base
+/// no puede confirmar citas ajenas.
+model TokenConfirmacion {
+  /// SHA-256 del token. El token en claro solo existe dentro del enlace enviado.
+  hash     String    @id
+  citaId   String    @unique
+  /// Vence a la hora de inicio de la cita: confirmar una cita ya empezada no
+  /// significa nada.
+  expiraEn DateTime
+  /// Un solo uso. Se marca en la misma transaccion que cambia el estado.
+  usadoEn  DateTime?
+  creadoEn DateTime  @default(now())
+
+  cita Cita @relation(fields: [citaId], references: [id], onDelete: Cascade)
+}
+
+/// Idempotencia de los webhooks entrantes: WAHA puede entregar el mismo evento dos
+/// veces. La fila es el registro de "esto ya se proceso"; el `@@id` lo garantiza.
+model EventoWebhook {
+  /// Id del evento tal cual lo manda el proveedor.
+  id         String   @id
+  canal      CanalNotificacion @default(WHATSAPP)
+  tipo       String
+  recibidoEn DateTime @default(now())
 }

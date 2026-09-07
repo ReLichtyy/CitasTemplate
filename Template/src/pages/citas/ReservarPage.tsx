@@ -70,6 +70,10 @@ export function ReservarPage() {
   const [horarios, setHorarios] = useState<ResultadoHorarios | null>(null);
 
   const [contacto, setContacto] = useState<DatosContacto>(CONTACTO_VACIO);
+
+  // Desmarcada por defecto: una casilla marcada de antemano no es consentimiento.
+
+  const [aceptaWhatsapp, setAceptaWhatsapp] = useState(false);
   const [guardados, setGuardados] = useState<UsuarioActual | null>(null);
 
   const [enviando, setEnviando] = useState(false);
@@ -196,6 +200,8 @@ export function ReservarPage() {
               apellido: contacto.apellido.trim() || undefined,
               email: contacto.email.trim() || undefined,
             },
+        // Opt-in explicito: sin el, el servidor no encola un solo mensaje.
+        aceptaWhatsapp: isAuthenticated ? undefined : aceptaWhatsapp,
       });
       setReserva(creada);
     } catch (error) {
@@ -390,6 +396,18 @@ export function ReservarPage() {
                 }
                 className={CAMPO_CLASSES}
               />
+            </label>
+            <label className="flex items-start gap-2 text-sm text-text sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={aceptaWhatsapp}
+                onChange={(evento) => setAceptaWhatsapp(evento.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                Quiero recibir por WhatsApp el aviso de esta cita y el enlace para
+                confirmarla.
+              </span>
             </label>
             <label className="flex flex-col gap-1 text-sm text-text sm:col-span-2">
               Correo (opcional)

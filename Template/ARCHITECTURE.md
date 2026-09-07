@@ -15,6 +15,7 @@ src/
   lib/        # helpers puros sin JSX (formatPrice, formatDuration, formatFecha, especialista) y configuracionPlaceholder (unico lugar con valores de negocio fijos hasta que exista GET /configuracion).
   types/      # formas de dominio compartidas (catalogo.ts: Especialista, Servicio, Rating, Resena). Las cards reciben estos objetos, no props sueltas.
   context/    # estado cross-cutting (AuthContext).
+  hooks/      # hooks compartidos sin JSX (useRecursoApi: una lectura del API y sus tres estados).
   api/        # client.ts, el unico fetch wrapper.
 ```
 
@@ -42,7 +43,7 @@ Dark mode sigue `prefers-color-scheme` del SO automaticamente (Tailwind v4 defau
 
 Referencia viva: `pages/gestion/servicios/ServiciosListPage.tsx` + `ServicioDetallePage.tsx`. Copiar ese patron para `empleados`, `horarios`, `restricciones`, `adicionales`, y adaptar para `citas` (que tiene reglas de rol distintas, ver `App.tsx`).
 
-Las 18 paginas restantes siguen siendo placeholders (`<h1>Titulo</h1>`) — ya heredan el `AppLayout` (Navbar/Footer) por estar dentro de la ruta layout en `App.tsx`, pero su contenido interno se migra al patron de arriba cuando se implemente ese dominio.
+Las paginas restantes siguen siendo placeholders (`<h1>Titulo</h1>`) — ya heredan el `AppLayout` (Navbar/Footer) por estar dentro de la ruta layout en `App.tsx`, pero su contenido interno se migra al patron de arriba cuando se implemente ese dominio.
 
 ## Data fetching
 
@@ -66,4 +67,4 @@ No simular esta logica en el frontend (ni con mocks locales de "horarios ocupado
 
 - **Tipos de dominio reales** (`Cita`, `Empleado`, `Servicio`, etc.) — hoy los services devuelven `unknown`/`any` porque el contrato de API no esta definido. Los tipos usados en `ServiciosListPage`/`ServicioDetallePage` (`ServicioListItem`, `ServicioDetail`) son placeholders de forma, no el contrato real.
 - Cambio de contrasena: `authService` no lo expone y `PerfilPage` no lo ofrece. Falta decidir que se pide para autorizarlo (ver 03-autorizacion.md).
-- Sin libreria de data-fetching (react-query/swr) — todo es `useEffect` + `useState` manual. Revisar si vale la pena introducir una cuando haya mas paginas con fetching real.
+- Sin libreria de data-fetching (react-query/swr). Las lecturas del catalogo publico pasan por `hooks/useRecursoApi.ts`, que resuelve cargando/error/vacio y cancela al desmontar, pero no cachea ni reintenta. Cuando eso haga falta, se reemplaza ese archivo y las paginas no cambian.

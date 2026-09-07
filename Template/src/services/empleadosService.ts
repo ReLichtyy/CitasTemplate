@@ -1,4 +1,5 @@
 import { apiClient } from '../api/client';
+import type { Rating } from '../types/catalogo';
 
 /** Servicio tal como lo trae la ficha publica de un empleado: lo que esa persona hace. */
 export type ServicioDeEmpleado = {
@@ -20,6 +21,11 @@ export type EmpleadoPublico = {
   usuario: { nombre: string; apellido: string | null };
   especialidad: { id: string; nombre: string } | null;
   servicios: ServicioDeEmpleado[];
+  /**
+   * Nulo mientras no tenga resenas publicadas. El API ya devuelve el promedio y las tres
+   * ultimas calculados: aqui no se suma nada.
+   */
+  rating: Rating | null;
 };
 
 export const empleadosService = {

@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
@@ -20,8 +21,10 @@ import type { ActualizarCitaDto } from './dto/actualizar-cita.dto.js';
 import type { CancelarCitaDto } from './dto/cancelar-cita.dto.js';
 import type { ConsultarDisponibilidadDto } from './dto/consultar-disponibilidad.dto.js';
 import type { ReservarCitaDto } from './dto/reservar-cita.dto.js';
+import { OutboxService } from '../notificaciones/outbox.service.js';
 
 const CODIGO_ESTADO_INICIAL = 'PENDIENTE';
+const CODIGO_ESTADO_CONFIRMADA = 'CONFIRMADA';
 const CODIGO_ESTADO_CANCELADA = 'CANCELADA';
 
 /** Granularidad con la que se ofrecen horarios libres en /citas/disponibilidad. */
@@ -79,7 +82,12 @@ interface ContextoDisponibilidad {
 
 @Injectable()
 export class CitasService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(CitasService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxService,
+  ) {}
 
   /**
    * El filtrado por propiedad de una lista no lo puede hacer el guard, que solo ve
@@ -141,7 +149,7 @@ export class CitasService {
           costoAdicionales,
         );
 
-        return await tx.cita.create({
+        const creada = await tx.cita.create({
           data: {
             clienteId,
             // Quien digito. Con sesion es siempre el del token, mande lo que mande el
@@ -166,6 +174,13 @@ export class CitasService {
           },
           include: INCLUIR_CITA,
         });
+
+        // Lo unico que este servicio sabe de las notificaciones: deja la intencion de
+        // enviar dentro de la transaccion que ya tenia. El envio ocurre despues, en
+        // otro proceso, y puede reintentar. Ver 09-conexion-whatsapp.md.
+        await this.outbox.encolarConfirmacion(tx, creada.id);
+
+        return creada;
       });
 
       // Un invitado se lleva su comprobante, no la ficha del titular del telefono.
@@ -411,6 +426,83 @@ export class CitasService {
   }
 
   /**
+   * Confirmar una cita desde el enlace firmado. La llama ConfirmacionService dentro
+   * de su transaccion, que es la misma donde se marca el token como usado.
+   *
+   * Escribir el estado a mano desde el modulo de notificaciones seria saltarse el
+   * invariante de `slotOcupado`: CONFIRMADA bloquea disponibilidad, asi que
+   * `slotOcupado` sigue valiendo `inicio`. Ver 02-reservas-concurrencia.md.
+   */
+  async marcarConfirmada(tx: Prisma.TransactionClient, citaId: string) {
+    const cita = await tx.cita.findUnique({
+      where: { id: citaId },
+      include: { estado: true },
+    });
+    if (!cita) {
+      throw new NotFoundException(MENSAJE_NO_ENCONTRADO);
+    }
+
+    if (cita.estado.codigo === CODIGO_ESTADO_CONFIRMADA) {
+      return this.resumenConfirmacion(tx, citaId);
+    }
+
+    // Una cita cancelada, atendida o no asistida ya no se confirma: el enlace pudo
+    // haber quedado dando vueltas en el telefono del cliente.
+    if (cita.estado.esFinal) {
+      throw new ConflictException(
+        `Esta cita esta ${cita.estado.nombre.toLowerCase()} y ya no se puede confirmar.`,
+      );
+    }
+
+    const confirmada = await this.estadoDeCatalogo(
+      tx,
+      CODIGO_ESTADO_CONFIRMADA,
+    );
+
+    await tx.cita.update({
+      where: { id: citaId },
+      data: {
+        estadoId: confirmada.id,
+        slotOcupado: confirmada.bloqueaDisponibilidad ? cita.inicio : null,
+      },
+    });
+
+    return this.resumenConfirmacion(tx, citaId);
+  }
+
+  /**
+   * Lo que ve quien llega por el enlace. Es lo minimo —servicio, profesional,
+   * fecha—: el enlace pudo haberse reenviado, asi que nunca sale el telefono ni el
+   * resto de la ficha del cliente.
+   */
+  async resumenConfirmacion(tx: Prisma.TransactionClient, citaId: string) {
+    const cita = await tx.cita.findUnique({
+      where: { id: citaId },
+      include: {
+        servicio: { select: { nombre: true } },
+        estado: { select: { codigo: true, nombre: true } },
+        empleado: {
+          select: { usuario: { select: { nombre: true, apellido: true } } },
+        },
+      },
+    });
+    if (!cita) {
+      throw new NotFoundException(MENSAJE_NO_ENCONTRADO);
+    }
+
+    return {
+      servicio: cita.servicio.nombre,
+      profesional: [cita.empleado.usuario.nombre, cita.empleado.usuario.apellido]
+        .filter(Boolean)
+        .join(' '),
+      inicio: cita.inicio,
+      fin: cita.fin,
+      estado: cita.estado.codigo,
+      confirmada: cita.estado.codigo === CODIGO_ESTADO_CONFIRMADA,
+    };
+  }
+
+  /**
    * Crear y modificar pasan por aqui, en este orden. Cinco reglas, ver 02-reservas-concurrencia.md.
    * Cada rechazo lleva su propio mensaje porque es lo que el usuario va a leer.
    */
@@ -605,12 +697,17 @@ export class CitasService {
 
     // Ficha sin contrasena: existe para colgar la cita de un telefono, no para
     // iniciar sesion. Ver el comentario de `Usuario.password` en el esquema.
+    // El opt-in solo se fija al **crear** la ficha. Sobre una ficha que ya existe no
+    // se toca: reservar con el telefono de otra persona no puede darle consentimiento
+    // en su nombre. Quien ya tiene cuenta lo cambia desde su perfil.
     const creado = await tx.usuario.create({
       data: {
         telefono,
         nombre: dto.cliente.nombre.trim(),
         apellido: dto.cliente.apellido?.trim(),
         email: dto.cliente.email?.trim(),
+        aceptaWhatsapp: dto.aceptaWhatsapp === true,
+        aceptaWhatsappEn: dto.aceptaWhatsapp === true ? new Date() : null,
       },
       select: { id: true },
     });

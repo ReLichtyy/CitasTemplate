@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsEmail,
   IsISO8601,
   IsOptional,
@@ -87,6 +88,16 @@ export class ReservarCitaDto {
   @IsOptional()
   @IsUUID(undefined, { message: 'El cliente indicado no es valido.' })
   clienteId?: string;
+
+  /**
+   * Opt-in para avisos por WhatsApp. Solo tiene efecto cuando la reserva **crea** la
+   * ficha del cliente: sobre una que ya existe se ignora, porque reservar con el
+   * telefono de otra persona no puede darle consentimiento en su nombre.
+   * Ver 09-conexion-whatsapp.md.
+   */
+  @IsOptional()
+  @IsBoolean({ message: 'El consentimiento debe ser verdadero o falso.' })
+  aceptaWhatsapp?: boolean;
 
   @IsOptional()
   @IsString({ message: 'Las notas deben ser texto.' })

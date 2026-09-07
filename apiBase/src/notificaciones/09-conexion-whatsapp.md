@@ -124,6 +124,15 @@ model NotificacionSalida {
 }
 ```
 
+El esquema aplicado suma dos cosas al bloque de arriba, y las dos salen de conectar
+el canal de verdad:
+
+- `NotificacionSalida.entregadaEn`, que marca el acuse del canal y no el envio. Una
+  fila `ENVIADA` sin entrega es informacion operativa: el numero puede no tener
+  WhatsApp, y eso lo tiene que ver el personal.
+- `model EventoWebhook`, el registro de "este evento ya se proceso". Es la
+  idempotencia del webhook, que el proveedor no garantiza.
+
 ### Invariantes
 
 1. La fila se escribe **dentro** de la misma `$transaction` que crea o cambia la
@@ -264,19 +273,45 @@ La misma idea, en la convención del repo:
 ```
 src/notificaciones/
 ├── 09-conexion-whatsapp.md          ← este archivo
-├── notificaciones.module.ts
+├── notificaciones.module.ts          global, como PrismaModule (ver abajo)
+├── notificaciones.config.ts          NOTIFICACIONES_WORKER, lote, reintentos
 ├── outbox.service.ts                 encolar (lo llama CitasService)
 ├── notificaciones.worker.ts          el @Cron que drena
 ├── whatsapp.gateway.ts               el puerto: interfaz, sin implementacion
+├── whatsapp-log.gateway.ts           implementacion de mentira, escribe al log
+├── plantillas.ts                     el texto de cada aviso (del negocio, no del canal)
 ├── confirmacion.service.ts           tokens: emitir, canjear
+├── confirmador-citas.port.ts         lo que este modulo necesita de citas
 ├── confirmacion.controller.ts        POST /citas/confirmacion
-└── whatsapp-webhook.controller.ts    POST /webhooks/whatsapp   (pendiente)
+├── acuses.service.ts                 concilia entregas, idempotencia de webhooks
+└── dto/confirmar-cita.dto.ts
+
+src/citas/citas.confirmador.ts        implementa el puerto de arriba
 
 src/integrations/waha/                el adaptador, aislado a proposito
 ├── waha.client.ts
 ├── waha.config.ts
-└── waha.types.ts
+├── waha.types.ts                     chatId y ack: vocabulario que no sale de aqui
+├── waha.module.ts
+└── waha-webhook.controller.ts        POST /webhooks/whatsapp
 ```
+
+**Dos desvios de la estructura propuesta, y por que.**
+
+El webhook quedo en `integrations/waha/` y no en `notificaciones/`: lo que entra por
+ahi es vocabulario del canal —`ack`, `@c.us`, la firma HMAC de WAHA—, y un controlador
+en `notificaciones/` que lo parsea es exactamente la frontera que este documento dice
+no cruzar. Lo que sale de ahi hacia `AcusesService` ya esta traducido.
+
+Y `CitasModule` **no** importa `NotificacionesModule`: lo alcanza porque es global,
+igual que `PrismaModule`. El grafo es circular por diseño —citas encola, y el canje
+del enlace vuelve a citas a cambiar el estado— y con los dos modulos importandose con
+`forwardRef` el arranque se queda colgado sin ningun error, a medio inicializar. El
+ciclo se toca en un solo punto: `citas/citas.confirmador.ts`, que inyecta
+`CitasService` con `forwardRef`. Ese archivo existe para que `ConfirmacionService`
+dependa de un puerto y no de `CitasService`, que en ESM cerraba un ciclo entre
+archivos y reventaba al arrancar con `Cannot access 'ConfirmacionService' before
+initialization`.
 
 `integrations/` sí es carpeta nueva y se justifica sola: marca la frontera con lo que
 está afuera y es reemplazable. `SyncModule` podría mudarse ahí después; no ahora.
@@ -286,60 +321,210 @@ está afuera y es reemplazable. `SyncModule` podría mudarse ahí después; no a
 Cada paso deja algo verificable. Los tres primeros no dependen de WhatsApp y se
 prueban con `curl`.
 
-1. **Esquema**: `NotificacionSalida`, `TokenConfirmacion`, `Usuario.aceptaWhatsapp`,
-   `ConfiguracionNegocio.prefijoPais`. Migración y semilla.
-2. **Outbox + tokens.** `CitasService.reservar` encola dentro de su transacción y
-   emite el token. Sin worker todavía: se verifica leyendo la tabla.
-3. **Confirmación de punta a punta, sin WhatsApp.** `POST /citas/confirmacion`, la
-   página del front, `PENDIENTE → CONFIRMADA`. Se prueba pegando el token a mano.
-   **Al terminar este paso el mecanismo completo ya funciona**; lo único que falta es
-   que el enlace llegue solo.
-4. **Gateway y worker**, contra una implementación de mentira que escribe a log en
-   vez de enviar. Aquí se verifican reintentos, `SKIP LOCKED` e idempotencia — que es
-   donde están los errores difíciles, y no hace falta WhatsApp para encontrarlos.
-5. **WAHA.** Ver abajo.
-6. **Recordatorio** (`RECORDATORIO_CITA`): otro `@Cron` que encola N horas antes.
-   Reusa todo lo anterior; es una fila más en el outbox.
+1. **Hecho · Esquema**: `NotificacionSalida`, `TokenConfirmacion`, `EventoWebhook`,
+   `Usuario.aceptaWhatsapp` (con la fecha del consentimiento) y
+   `ConfiguracionNegocio.prefijoPais`. Migración `20260907082726_notificaciones`. La
+   semilla **rellena** `prefijoPais` cuando esta en NULL en vez de reescribir la
+   identidad del negocio: una fila anterior al campo dejaria el modulo sin entregar un
+   solo mensaje, y eso es un sintoma silencioso.
+2. **Hecho · Outbox + tokens.** `CitasService.reservar` llama a
+   `OutboxService.encolarConfirmacion(tx, citaId)` dentro de su propia transacción, y
+   el outbox emite el token ahi mismo. Citas no sabe que el aviso lleva un enlace
+   firmado. El enlace vive en `variables` mientras la fila esta pendiente y el worker
+   lo borra al enviar, para que en reposo vuelva a quedar solo el hash del token.
+3. **Hecho · Confirmación de punta a punta, sin WhatsApp.**
+   `POST /citas/confirmacion` y `POST /citas/confirmacion/consulta`, la página
+   `Template/src/pages/citas/ConfirmarCitaPage.tsx` en `/citas/confirmar/:token`, y
+   `PENDIENTE → CONFIRMADA` con `slotOcupado` intacto. Verificado tambien lo aburrido:
+   confirmar dos veces es un no-op, y un token inexistente responde igual que uno
+   vencido.
+4. **Hecho · Gateway y worker** contra `WhatsappLogGateway`, que escribe el mensaje al
+   log en vez de mandarlo. Ahi se verifican el reclamo `FOR UPDATE SKIP LOCKED`, el
+   retroceso 1/5/15/60 min, el tope a `FALLIDA` y la devolucion a la cola de un
+   reclamo colgado — que es donde estan los errores dificiles.
+5. **Falta escanear · WAHA.** El adaptador, su config y el webhook estan escritos, y
+   el webhook verificado con firma valida, invalida y evento repetido. Lo que queda es
+   manual. Ver abajo.
+6. **Pendiente · Recordatorio** (`RECORDATORIO_CITA`): otro `@Cron` que encola N horas
+   antes. Reusa todo lo anterior; es una fila más en el outbox.
 
 ---
+# WAHA
 
-# Pendiente · WAHA
+Instalado y verificado. **La sesión existe y sigue esperando el escaneo del QR.** El
+codigo del envio ya esta —`waha.client.ts` y el webhook—, asi que escanear es
+literalmente lo unico que separa a este modulo de mandar mensajes de verdad.
 
-**Esta sección no se implementa todavía.** Queda escrita para que la decisión y sus
-consecuencias estén registradas, no para trabajarse ahora.
+Lo de aquí abajo es lo que hace falta para operarlo, no un tutorial de arranque: eso
+lo cubre el [README del proyecto](https://github.com/devlikeapro/waha).
 
-El paso 4 deja el sistema entero funcionando contra un gateway falso. Conectar WAHA
-es reemplazar esa implementación por otra, y nada más. Se hace cuando haya VPS y un
-número dedicado que se pueda perder.
+## Lo que ya corre
 
-## Lo que hay que resolver cuando se retome
+Servicio `waha` en el `docker-compose.yml` de la raíz.
 
-**Sesión y QR.** WAHA necesita escanear un QR una vez, desde su panel. En un VPS eso
-significa exponer temporalmente su puerto o entrar por túnel SSH. La sesión vive en
-el volumen; si se pierde, hay que volver a escanear con el teléfono en la mano.
+| | |
+|---|---|
+| Imagen | `devlikeapro/waha:latest-2026.8.2` |
+| Tier | CORE (gratis) |
+| Motor | WEBJS — Chromium real adentro del contenedor |
+| Contenedor | `citas-waha` |
+| Publicado en | `127.0.0.1:3001` |
+| Volumen | `waha-sessions` → `/app/.sessions` |
 
-**WAHA Core es de sesión única y no manda medios.** Para texto alcanza. Si algún día
-hacen falta imágenes o varios números, es la edición Plus — decisión de costo, no de
-código.
+**Ojo con el nombre del tag.** `latest-2026.8.2` no significa "la más nueva":
+`latest` es el nombre de la *variante* con Chromium incluido, y `2026.8.2` es la
+versión. Las otras variantes de esa misma versión son `noweb-2026.8.2` (websocket,
+sin navegador, mucho más liviana) y `gows-2026.8.2` (lo mismo en Go). Pedir
+`devlikeapro/waha:2026.8.2` a secas **no existe** y el `pull` falla.
 
-**Autenticación del webhook.** `POST /webhooks/whatsapp` es `@Public()` por
-definición: lo llama un servicio, no una persona con token. Necesita entonces un
-secreto compartido verificado en el propio handler, y comparado en tiempo constante.
-Sin eso, cualquiera que alcance la ruta inyecta eventos.
+Se fija la versión por lo mismo que MariaDB: la de tu máquina y la del VPS tienen que
+ser la misma, o terminas depurando diferencias que no están en tu código.
 
-**Idempotencia del webhook.** WAHA puede entregar el mismo evento dos veces. Se
-guarda el id del evento y se descarta el repetido. Un evento procesado dos veces no
-puede confirmar dos veces.
+## Puertos — el choque que hay que evitar
 
-**Respuesta de texto como comodidad, nunca como único camino.** Si el cliente escribe
-"confirmar" en vez de tocar el enlace, se puede intentar resolverlo — pero solo
-cuando tenga **exactamente una** cita pendiente. Con dos o más, la respuesta correcta
-es reenviarle el enlace, no adivinar. Y si el texto no se reconoce, tampoco se
-adivina: el enlace ya está en el mensaje anterior.
+**WAHA escucha en 3000 adentro del contenedor. El API de citas escucha en 3000 en el
+host.** Es el mismo número y son dos cosas distintas.
 
-**Acuses de entrega.** El evento de estado trae el id del mensaje, que es lo que se
-guardó en `NotificacionSalida.idExterno`. Con eso se marca entregado o se detecta que
-el número no tiene WhatsApp, que es información que el personal necesita.
+No chocan porque el puerto se publica corrido:
+
+```
+127.0.0.1:3001  (host)  →  3000  (contenedor)
+```
+
+O sea: el API de citas sigue en `localhost:3000`, WAHA se atiende en
+`localhost:3001`, y adentro del contenedor nadie más usa el 3000. Cambiar el mapeo a
+`3000:3000` rompe el arranque del API con `EADDRINUSE`.
+
+**En el VPS esa línea `ports:` se borra entera.** WAHA queda solo en la red interna de
+Docker y el worker lo alcanza por nombre de servicio (`http://waha:3000`). Publicarlo
+no aporta nada y abre lo que dice la sección siguiente.
+
+## Autenticación
+
+`WHATSAPP_API_KEY` es obligatoria y viaja en la cabecera **`X-Api-Key`** en cada
+petición. Verificado: sin clave y con clave incorrecta, `401`.
+
+Es la única autenticación que tiene. Y responde con `Access-Control-Allow-Origin: *`,
+así que expuesto a internet cualquier página web puede pegarle desde el navegador de
+un visitante. **Quien alcance ese puerto manda WhatsApp con el número del negocio.**
+De ahí que el mapeo sea a loopback en local, y que en el VPS no se publique.
+
+El panel (`/dashboard`) tiene credenciales aparte: `WAHA_DASHBOARD_USERNAME` y
+`WAHA_DASHBOARD_PASSWORD`. Por defecto son `waha`/`waha`; están sobrescritas.
+
+Las tres claves (`WAHA_API_KEY`, la del panel y `WAHA_HOOK_HMAC_KEY`) se generaron
+aleatorias y viven en el `.env` de la **raíz**, que es un archivo distinto del de
+`apiBase/`. La raíz no tenía `.gitignore` hasta ahora; se creó uno para ese archivo.
+
+## Ciclo de vida de la sesión
+
+```
+STARTING  →  SCAN_QR_CODE  →  WORKING
+```
+
+Del orden de 15–25 s hasta `SCAN_QR_CODE`: está levantando Chromium.
+
+```bash
+KEY=$(grep WAHA_API_KEY= .env | cut -d= -f2-)
+
+# crear y arrancar
+curl -X POST http://localhost:3001/api/sessions \
+  -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"name":"default","start":true}'
+
+# en qué estado va
+curl -H "X-Api-Key: $KEY" http://localhost:3001/api/sessions/default
+
+# el QR, como PNG
+curl -H "X-Api-Key: $KEY" http://localhost:3001/api/default/auth/qr --output qr.png
+```
+
+Más cómodo: **`http://localhost:3001/dashboard`** muestra el QR en pantalla.
+
+El worker no ejecuta nada de esto. Arrancar una sesión y escanear un QR es operación
+manual, una vez por despliegue; el código solo manda mensajes contra una sesión que ya
+está `WORKING`.
+
+## `chatId` y el hueco de los teléfonos
+
+Enviar es así:
+
+```bash
+curl -X POST http://localhost:3001/api/sendText \
+  -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"session":"default","chatId":"50688887777@c.us","text":"Hola"}'
+```
+
+El `chatId` es **el número internacional sin `+`, con `@c.us` pegado atrás**.
+
+Esto conecta directo con el hueco que ya señalaba la spec: `normalizarTelefono`
+conserva el `+` solo si venía, y el DTO acepta siete dígitos. Un `88887777` produce
+`88887777@c.us`, que no es nadie. **`ConfiguracionNegocio.prefijoPais` no es un
+adorno: sin él este módulo no entrega un solo mensaje.**
+
+La traducción de teléfono a `chatId` vive en `waha.client.ts` y en ningún otro lado.
+`@c.us` es vocabulario de WhatsApp; que se filtre al outbox o al dominio es la
+frontera del gateway rompiéndose.
+
+## Persistencia
+
+El volumen `waha-sessions` guarda la sesión de WhatsApp Web. Borrarlo obliga a
+reescanear el QR con el teléfono en la mano — que es justo lo que no se puede hacer a
+distancia un domingo.
+
+`WHATSAPP_RESTART_ALL_SESSIONS=True` hace que las sesiones vuelvan solas al reiniciar
+el contenedor. Sin eso hay que arrancarlas a mano después de cada despliegue.
+
+`docker compose down` no lo toca. `docker compose down -v` **sí lo borra**, igual que
+borra la base.
+
+## Límites del tier CORE
+
+- **Una sola sesión.** Un número por instancia. Varios negocios en un VPS son varias
+  instancias, o Plus.
+- **No manda medios.** Solo texto. Para la confirmación alcanza: es un enlace.
+
+Ninguno de los dos bloquea lo que este módulo necesita. Si algún día hacen falta, es
+decisión de costo, no de código.
+
+## Lo que falta para conectarlo
+
+1. **Falta · Escanear el QR** con el número dedicado. Es lo unico que queda y es
+   manual: `/dashboard`, o el endpoint del QR. Hasta que el estado diga `WORKING`, no
+   sale nada. Es tambien el punto de no retorno: ese numero es el que se arriesga.
+   Despues de escanear, descomentar `WAHA_URL=http://localhost:3001` en
+   `apiBase/.env`; mientras esa variable este vacia el worker usa el gateway de log y
+   todo lo demas funciona igual.
+2. **Hecho · `waha.client.ts`** implementando `whatsapp.gateway.ts` con
+   `POST /api/sendText`. Config propia (`WAHA_URL`, `WAHA_API_KEY`, `WAHA_SESSION`) en
+   su namespace, como `external-api.config.ts`. En local
+   `WAHA_URL=http://localhost:3001`; en el VPS, `http://waha:3000`.
+3. **Hecho · `waha-webhook.controller.ts`**, y las tres variables de webhook del
+   `docker-compose.yml` ya descomentadas. La firma se calcula sobre el cuerpo crudo,
+   asi que `main.ts` arranca con `rawBody: true`: recalcularla sobre el JSON
+   re-serializado cambia espacios y orden de claves y ninguna firma legitima
+   coincidiria.
+   - `WHATSAPP_HOOK_URL` — en local
+     `http://host.docker.internal:3000/webhooks/whatsapp`; el `extra_hosts` del
+     compose es lo que le permite al contenedor alcanzar tu host. En el VPS, la URL
+     interna del API.
+   - `WHATSAPP_HOOK_EVENTS` — `message,message.ack`. Nada de `*`: cada evento
+     suscrito es una petición que tu API tiene que atender y descartar.
+   - `WHATSAPP_HOOK_HMAC_KEY` — ya está generada. La firma se verifica en el handler
+     con comparación de tiempo constante, porque la ruta es `@Public()`.
+4. **Hecho · Idempotencia del webhook.** El id del evento se guarda en
+   `EventoWebhook` y el repetido se descarta. Un evento **sin** id se descarta entero:
+   sin id no hay como saber si es repetido, y arriesgar un doble efecto es peor que
+   perder un acuse.
+5. **Hecho · Acuses de entrega.** `message.ack` trae el id del mensaje, que es lo que
+   se guardó en `NotificacionSalida.idExterno`. Con eso se marca `entregadaEn`, o se
+   anota que el número no tiene WhatsApp — información que el personal necesita para
+   levantar el teléfono. Un `ack` de error **no** reintenta: el envio si ocurrio, lo
+   que fallo es la entrega, y reintentarlo solo duplica.
+6. **Pendiente · Respuesta de texto, como comodidad y nunca como único camino.** Si el cliente
+   escribe "confirmar" en vez de tocar el enlace, se resuelve **solo cuando tenga
+   exactamente una** cita pendiente. Con dos o más se le reenvía el enlace; adivinar
+   confirma la cita equivocada. Si el texto no se reconoce, tampoco se adivina.
 
 ## El riesgo, escrito
 
@@ -356,24 +541,23 @@ nada.
 
 Se asume a sabiendas, con dos condiciones que no son negociables:
 
-- El número es **dedicado y desechable**. Nunca el número principal del negocio.
+- El número es **dedicado y desechable**. Nunca el número principal del negocio. Esto
+  se decide **antes** de escanear el QR: después ya está hecho.
 - El día que caiga, se migra a la Cloud API oficial. Ese día no debe tocar ni el
-  outbox, ni el worker, ni el dominio de citas — solo aparece un
-  `integrations/meta/` al lado de `integrations/waha/`. **Si esa migración resulta
-  cara, la frontera del gateway se rompió en algún punto y eso es el defecto a
-  arreglar, no la migración.**
+  outbox, ni el worker, ni el dominio de citas — solo aparece un `integrations/meta/`
+  al lado de `integrations/waha/`. **Si esa migración resulta cara, la frontera del
+  gateway se rompió en algún punto, y eso es el defecto a arreglar, no la migración.**
 
 ## La alternativa, para cuando toque decidir
 
 La Cloud API de Meta no necesita nada en Docker: es HTTP contra `graph.facebook.com`.
 A cambio pide número no registrado en WhatsApp, Business Manager verificado, política
-de privacidad publicada, plantillas aprobadas una por una, y opt-in explícito. El
-alta ronda los 5–7 días hábiles.
+de privacidad publicada, plantillas aprobadas una por una, y opt-in explícito. El alta
+ronda los 5–7 días hábiles.
 
 Cobra por mensaje entregado desde julio de 2025. Un recordatorio de cita cae en
 categoría *utility*, y **desde el 1 de octubre de 2026 las plantillas utility dentro
-de la ventana de 24 h dejaron de ser gratis**. Los mensajes no entregados no se
-cobran.
+de la ventana de 24 h dejaron de ser gratis**. Los mensajes no entregados no se cobran.
 
 Riesgo de baneo cumpliendo la política: prácticamente nulo. Es la diferencia que se
 está comprando.

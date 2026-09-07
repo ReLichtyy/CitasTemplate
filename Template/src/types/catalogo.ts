@@ -1,7 +1,7 @@
-// Formas de dominio del catalogo publico, en un solo lugar. Hoy las llenan los
-// placeholders de EquipoPage; manana, el contrato de los endpoints publicos de solo
-// lectura (spec 03). Las cards consumen estos tipos en vez de props sueltas: agregar un
-// campo deja de obligar a tocar la pagina y las dos cards.
+// Formas de dominio del catalogo publico, en un solo lugar. Las llenan `GET /empleados` y
+// `GET /servicios` (publicos, solo registros activos y solo campos publicos), pasando por
+// `lib/especialista.ts` en el caso del especialista. Las cards consumen estos tipos en vez
+// de props sueltas: agregar un campo deja de obligar a tocar la pagina y las dos cards.
 
 export type Resena = {
   id: string;

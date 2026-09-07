@@ -17,6 +17,8 @@ import { ServiciosModule } from './servicios/servicios.module.js';
 import { HorariosModule } from './horarios/horarios.module.js';
 import { RestriccionesModule } from './restricciones/restricciones.module.js';
 import { AdicionalesModule } from './adicionales/adicionales.module.js';
+import { NotificacionesModule } from './notificaciones/notificaciones.module.js';
+import { WahaModule } from './integrations/waha/waha.module.js';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { AdicionalesModule } from './adicionales/adicionales.module.js';
     HorariosModule,
     RestriccionesModule,
     AdicionalesModule,
+    NotificacionesModule,
+    WahaModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

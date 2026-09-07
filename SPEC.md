@@ -12,6 +12,7 @@ Specs cortos, uno por componente. Cada archivo se lee solo cuando se toca ese co
 | 06 | `Template/src/pages/publico/06-hero-landing.md` | `LandingPage.tsx` |
 | 07 | `Template/src/components/ui/07-card-servicio.md` | `ServicioCard.tsx` |
 | 08 | `Template/src/pages/publico/08-pagina-especialistas.md` | `EquipoPage.tsx` |
+| 09 | `apiBase/src/notificaciones/09-conexion-whatsapp.md` | `notificaciones.module.ts` |
 
 Cada spec vive en la carpeta del código que describe: abrir el módulo es encontrarlo. Este
 archivo es el único índice, y lo que un agente debe leer primero.
@@ -48,6 +49,17 @@ va a la página de sin acceso. Ver `03-autorizacion.md`.
 adaptabilidad. Toda regla que importe —precio, disponibilidad, propiedad, permisos— se
 decide y se aplica en el servidor. El frontend muestra lo que el API responde; no lo simula.
 
+**Notificar no puede tumbar una reserva.** El aviso por WhatsApp sale de una tabla de
+salida (outbox) que se escribe dentro de la transacción de la cita; el envío ocurre
+después, en otro proceso. Ninguna llamada de red vive dentro de una `$transaction`. Y la
+confirmación del cliente viaja por un enlace firmado, no por interpretar el texto de una
+respuesta. Ver `09-conexion-whatsapp.md`.
+
+**El canal de WhatsApp es reemplazable por contrato.** WAHA maneja una sesión de WhatsApp
+Web por ingeniería inversa: viola los términos de servicio y el baneo cae sobre el número
+del negocio, no sobre el servidor. Se asume a sabiendas, con número dedicado y desechable,
+y detrás de una interfaz que la Cloud API oficial pueda implementar sin tocar el dominio.
+
 ## Orden de implementación
 
 1. Esquema y migración inicial + semilla de catálogos (`01-modelo-datos.md`).
@@ -77,3 +89,8 @@ decide y se aplica en el servidor. El frontend muestra lo que el API responde; n
 8. Endpoints públicos de catálogo, `ServicioCard` y `EspecialistaCard`, las páginas de
    detalle público `/servicios/:id` y `/equipo/:id`, y la página de Especialistas
    (`07-card-servicio.md`, `08-pagina-especialistas.md`).
+
+9. Confirmación por WhatsApp (`09-conexion-whatsapp.md`). Los pasos 1 a 4 de esa spec no
+   dependen de WhatsApp y se verifican con `curl`: al terminar el 3, confirmar una cita ya
+   funciona de punta a punta pegando el token a mano. Conectar WAHA es el paso 5 y queda
+   pendiente hasta que haya VPS y un número dedicado.
