@@ -1,0 +1,29 @@
+# MariaDB local para desarrollo y pruebas.
+#
+# La version esta fijada a proposito: el VPS debe correr esta misma linea. Una
+# migracion que pasa aqui solo garantiza nada si alla corre otro motor.
+#
+#   docker compose up -d        levantar
+#   docker compose down         parar (los datos sobreviven en el volumen)
+#   docker compose down -v      parar y BORRAR los datos
+services:
+  db:
+    image: mariadb:11.4
+    container_name: citas-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: dev
+      MARIADB_DATABASE: citas_template
+    ports:
+      # Solo loopback: la base nunca se expone a la red, ni aqui ni en el VPS.
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - citas-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  citas-db-data:

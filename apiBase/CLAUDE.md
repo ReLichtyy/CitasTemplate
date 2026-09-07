@@ -38,7 +38,22 @@ backend; los specs de cada módulo (`prisma/01-…`, `src/citas/02-…`, `src/au
 - Verificar e insertar una cita van dentro de una `$transaction`.
 - Las horas del día son minutos desde medianoche; los instantes absolutos son `DateTime`.
 
+## Rutas abiertas
+
+- Toda ruta `@Public()` que escriba o que cueste trabajo (bcrypt) lleva
+  `@UseGuards(LimiteIntentosGuard)` + `@LimiteIntentos(...)`. Sin eso, probar contraseñas
+  cuesta lo mismo que pedirlas.
+- Un fallo de credenciales responde igual para teléfono inexistente, contraseña incorrecta,
+  ficha sin contraseña y cuenta inactiva — y tarda lo mismo (hash señuelo). El login no es
+  un directorio de quién está registrado.
+- Ningún DTO acepta `rol`, `activo` ni `telefono` en una edición de perfil. El servicio
+  además los fija: la defensa no depende de la configuración del `ValidationPipe`.
+
 ## Secretos
 
 `JWT_SECRET` y `DATABASE_URL` no tienen valor por defecto: si faltan, el proceso falla al
-arrancar. Un secreto por defecto es una brecha silenciosa.
+arrancar. Un secreto por defecto es una brecha silenciosa. `JWT_SECRET` además exige 32
+caracteres (`auth/jwt-secret.ts`).
+
+`/docs` solo se monta fuera de producción: es middleware de Express crudo y no pasa por los
+guards, así que publicarlo publica la referencia completa del API.

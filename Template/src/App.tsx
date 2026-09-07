@@ -4,6 +4,7 @@ import { ServiciosPage } from './pages/publico/ServiciosPage';
 import { EquipoPage } from './pages/publico/EquipoPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
+import { PerfilPage } from './pages/auth/PerfilPage';
 import { CitasListPage } from './pages/citas/CitasListPage';
 import { AgendaPage } from './pages/citas/AgendaPage';
 import { ReservarPage } from './pages/citas/ReservarPage';
@@ -41,6 +42,11 @@ function App() {
         {/* auth */}
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/auth/registro" element={<RegisterPage />} />
+        {/* El perfil si manda al login: es lo que falta para verlo, y despues del login
+            se vuelve aqui. */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/auth/perfil" element={<PerfilPage />} />
+        </Route>
 
         {/* citas propias: cualquier rol con sesion, acotadas en el servidor. Un
             invitado no tiene citas que ver, asi que va a la pagina de sin acceso y no
@@ -52,7 +58,7 @@ function App() {
           <Route path="/citas/:id/editar" element={<EditarCitaPage />} />
 
           {/* gestion: admin + empleado only */}
-          <Route element={<RoleRoute allow={['admin', 'empleado']} />}>
+          <Route element={<RoleRoute allow={['ADMIN', 'EMPLEADO']} />}>
             <Route path="/gestion/servicios" element={<ServiciosListPage />} />
             <Route path="/gestion/servicios/:id" element={<ServicioDetallePage />} />
             <Route path="/gestion/adicionales" element={<AdicionalesListPage />} />

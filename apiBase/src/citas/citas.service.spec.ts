@@ -61,14 +61,14 @@ const ESTADOS: Record<string, unknown> = { PENDIENTE, CONFIRMADA, CANCELADA };
 
 const CLIENTE: AuthenticatedUser = {
   userId: 'usr-cli',
-  email: 'cliente@ejemplo.test',
-  role: Role.CLIENTE,
+  telefono: '88880001',
+  rol: Role.CLIENTE,
 };
 
 const ADMIN: AuthenticatedUser = {
   userId: 'usr-adm',
-  email: 'admin@ejemplo.test',
-  role: Role.ADMIN,
+  telefono: '88880002',
+  rol: Role.ADMIN,
 };
 
 const dtoBase: ReservarCitaDto = {
@@ -460,8 +460,8 @@ describe('CitasService.findAll', () => {
 
     await new CitasService(prisma).findAll({
       userId: 'usr-emp',
-      email: 'emp@ejemplo.test',
-      role: Role.EMPLEADO,
+      telefono: '88880003',
+      rol: Role.EMPLEADO,
     });
 
     // Un `where` vacio aqui le enseñaria la agenda de todo el mundo.

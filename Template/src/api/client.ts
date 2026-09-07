@@ -19,6 +19,26 @@ export class ApiError extends Error {
   }
 }
 
+type ManejadorNoAutorizado = () => void;
+
+let manejadorNoAutorizado: ManejadorNoAutorizado | null = null;
+
+/**
+ * Un 401 sobre una peticion con token significa que la sesion murio (vencida, o firmada
+ * con un secreto anterior). Se avisa una sola vez y desde aqui, para que ninguna pagina
+ * tenga que acordarse de cerrar sesion por su cuenta. Ver 03-autorizacion.md.
+ *
+ * Devuelve la funcion para darse de baja.
+ */
+export function alPerderSesion(manejador: ManejadorNoAutorizado): () => void {
+  manejadorNoAutorizado = manejador;
+  return () => {
+    if (manejadorNoAutorizado === manejador) {
+      manejadorNoAutorizado = null;
+    }
+  };
+}
+
 type SobreRespuesta = { success: boolean; data: unknown; message: string | null };
 
 function esSobre(cuerpo: unknown): cuerpo is SobreRespuesta {
@@ -73,6 +93,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const cuerpo = await leerCuerpo(response);
 
   if (!response.ok) {
+    // Solo si la peticion llevaba token: el 401 del login es "credenciales incorrectas",
+    // no una sesion caida, y ahi no hay nada que cerrar.
+    if (response.status === 401 && token) {
+      manejadorNoAutorizado?.();
+    }
     throw new ApiError(mensajeDeError(cuerpo, response), response.status);
   }
 

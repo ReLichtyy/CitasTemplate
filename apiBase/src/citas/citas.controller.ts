@@ -7,8 +7,11 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import { LimiteIntentos } from '../common/decorators/limite-intentos.decorator.js';
+import { LimiteIntentosGuard } from '../common/guards/limite-intentos.guard.js';
 import { PropiedadCita } from '../common/decorators/propiedad.decorator.js';
 import { AuthOpcional, Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -50,7 +53,12 @@ export class CitasController {
   // Se reserva con o sin sesion. Sin ella hay que mandar `cliente` con el telefono,
   // que es la identidad del cliente; con ella el cliente sale del token y un CLIENTE
   // solo puede reservar para si mismo. Lo resuelve CitasService, no el guard.
+  // Es la unica escritura que acepta un invitado, asi que tambien es la unica que se
+  // puede repetir sin cuenta: se limita por IP. El numero es holgado a proposito — una
+  // familia detras de la misma IP reserva varias veces y eso es trafico legitimo.
   @AuthOpcional()
+  @UseGuards(LimiteIntentosGuard)
+  @LimiteIntentos({ intentos: 20, ventanaMs: 60 * 60_000 })
   @Post()
   reservar(
     @Body() dto: ReservarCitaDto,

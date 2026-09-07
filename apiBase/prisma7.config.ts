@@ -7,6 +7,10 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // `migrate reset` y `migrate dev` siembran solos: una base recien creada sin
+    // catalogo de estados no puede agendar nada, asi que vaciarla sin resembrar
+    // deja el API arriba pero inutil.
+    seed: "tsx --env-file=.env prisma/seed.ts",
   },
   datasource: {
     url: process.env["DATABASE_URL"],

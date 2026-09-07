@@ -38,7 +38,7 @@ export class PropiedadCitaGuard implements CanActivate {
       throw new ForbiddenException(MENSAJE);
     }
 
-    if (opciones.rolesLibres.includes(user.role)) {
+    if (opciones.rolesLibres.includes(user.rol)) {
       return true;
     }
 
@@ -57,7 +57,7 @@ export class PropiedadCitaGuard implements CanActivate {
 
     // Un EMPLEADO pasa sobre las citas de su propia agenda; cualquier rol pasa sobre
     // las citas de las que es cliente.
-    if (user.role === Role.EMPLEADO && cita.empleado.usuarioId === user.userId) {
+    if (user.rol === Role.EMPLEADO && cita.empleado.usuarioId === user.userId) {
       return true;
     }
     if (cita.clienteId === user.userId) {

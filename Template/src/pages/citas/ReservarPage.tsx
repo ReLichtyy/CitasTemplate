@@ -4,6 +4,8 @@ import { ApiError } from '../../api/client';
 import { Button } from '../../components/ui/Button';
 import { ButtonLink } from '../../components/ui/ButtonLink';
 import { Card, CARD_BASE_CLASSES } from '../../components/ui/Card';
+import { Alert } from '../../components/ui/Alert';
+import { CAMPO_CLASSES } from '../../components/ui/Field';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Spinner } from '../../components/ui/Spinner';
@@ -15,9 +17,6 @@ import {
   type EmpleadoPublico,
   type ServicioDeEmpleado,
 } from '../../services/empleadosService';
-
-const CAMPO_CLASSES =
-  'min-h-11 w-full rounded-lg border border-border bg-bg px-3 text-sm text-text-h transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-border';
 
 const OPCION_CLASSES = `${CARD_BASE_CLASSES} w-full text-left transition duration-200 hover:border-accent-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-border`;
 const OPCION_ELEGIDA_CLASSES = 'border-accent-border bg-accent-bg';
@@ -433,17 +432,8 @@ export function ReservarPage() {
             </Card>
           )}
 
-          {/* El texto sale del API. Se enmarca para que no se lea como una linea mas
-              del formulario, pero con los tokens que ya existen: la paleta no tiene
-              color de error, e inventarlo aqui seria decidir marca de paso. */}
-          {errorReserva && (
-            <p
-              role="alert"
-              className="rounded-lg border border-accent-border bg-accent-bg px-4 py-3 text-sm font-medium text-text-h"
-            >
-              {errorReserva}
-            </p>
-          )}
+          {/* El texto sale del API, no de una cadena inventada aqui. */}
+          {errorReserva && <Alert>{errorReserva}</Alert>}
 
           <div>
             <Button onClick={confirmar} disabled={!puedeConfirmar || enviando}>

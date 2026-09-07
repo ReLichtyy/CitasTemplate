@@ -65,5 +65,5 @@ No simular esta logica en el frontend (ni con mocks locales de "horarios ocupado
 ## Pendiente (no cubierto en este pass)
 
 - **Tipos de dominio reales** (`Cita`, `Empleado`, `Servicio`, etc.) — hoy los services devuelven `unknown`/`any` porque el contrato de API no esta definido. Los tipos usados en `ServiciosListPage`/`ServicioDetallePage` (`ServicioListItem`, `ServicioDetail`) son placeholders de forma, no el contrato real.
-- `authService` no tiene `register`/`logout`/`me` pese a que `RegisterPage` existe como ruta.
+- Cambio de contrasena: `authService` no lo expone y `PerfilPage` no lo ofrece. Falta decidir que se pide para autorizarlo (ver 03-autorizacion.md).
 - Sin libreria de data-fetching (react-query/swr) — todo es `useEffect` + `useState` manual. Revisar si vale la pena introducir una cuando haya mas paginas con fetching real.

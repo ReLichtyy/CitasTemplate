@@ -292,7 +292,7 @@ export class CitasService {
       // Los dos indicadores estan separados justamente para este caso: una cita
       // Confirmada no la cancela el cliente, pero el personal si. Ver 01-modelo-datos.md.
       const esPersonal =
-        user.role === Role.ADMIN || user.role === Role.EMPLEADO;
+        user.rol === Role.ADMIN || user.rol === Role.EMPLEADO;
       const permitido = esPersonal
         ? cita.estado.permiteCancelacionPersonal
         : cita.estado.permiteCancelacionCliente;
@@ -571,7 +571,7 @@ export class CitasService {
   ): Promise<string> {
     if (user) {
       const esPersonal =
-        user.role === Role.ADMIN || user.role === Role.EMPLEADO;
+        user.rol === Role.ADMIN || user.rol === Role.EMPLEADO;
       const id = esPersonal && dto.clienteId ? dto.clienteId : user.userId;
       const cliente = await tx.usuario.findUnique({
         where: { id },
@@ -658,11 +658,11 @@ export class CitasService {
   private async filtroPorPropiedad(
     user: AuthenticatedUser,
   ): Promise<Prisma.CitaWhereInput> {
-    if (user.role === Role.ADMIN) {
+    if (user.rol === Role.ADMIN) {
       return {};
     }
 
-    if (user.role === Role.EMPLEADO) {
+    if (user.rol === Role.EMPLEADO) {
       const empleado = await this.prisma.empleado.findUnique({
         where: { usuarioId: user.userId },
         select: { id: true },

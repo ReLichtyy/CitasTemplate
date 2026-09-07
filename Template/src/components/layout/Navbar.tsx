@@ -19,10 +19,10 @@ const ENLACES_PUBLICOS: Enlace[] = [
 ];
 
 export function Navbar() {
-  const { isAuthenticated, role, logout } = useAuth();
+  const { isAuthenticated, rol, logout } = useAuth();
   const location = useLocation();
   const [menuState, setMenuState] = useState({ open: false, pathname: location.pathname });
-  const isGestion = role === 'admin' || role === 'empleado';
+  const isGestion = rol === 'ADMIN' || rol === 'EMPLEADO';
 
   if (menuState.pathname !== location.pathname) {
     setMenuState({ open: false, pathname: location.pathname });
@@ -40,6 +40,7 @@ export function Navbar() {
   const enlaces: Enlace[] = [
     ...ENLACES_PUBLICOS,
     ...(isAuthenticated ? [{ to: '/citas', label: 'Citas' }] : []),
+    ...(isAuthenticated ? [{ to: '/auth/perfil', label: 'Mi perfil' }] : []),
     ...(isGestion ? [{ to: '/gestion/servicios', label: 'Gestion' }] : []),
   ];
 

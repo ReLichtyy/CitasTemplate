@@ -50,13 +50,25 @@ decide y se aplica en el servidor. El frontend muestra lo que el API responde; n
 
 ## Orden de implementación
 
-1. Esquema y migración inicial + semilla de catálogos (`01-modelo-datos.md`). Falta además
-   instalar y cablear un driver adapter (`@prisma/adapter-mariadb`): sin él Prisma 7 no
-   construye el cliente y el API no arranca. Mientras tanto, `DATOS_QUEMADOS=true` sirve un
-   catálogo en memoria desde `apiBase/src/demo/` — andamiaje que se borra en este paso.
+1. Esquema y migración inicial + semilla de catálogos (`01-modelo-datos.md`).
+   **Hecho:** MariaDB local en `docker-compose.yml` (raíz, `mariadb:11.4`, solo
+   `127.0.0.1`), driver adapter `@prisma/adapter-mariadb` cableado en `PrismaService`, y
+   migración inicial aplicada en `apiBase/prisma/migrations/`. El API arranca contra la
+   base real.
+   Semilla en `apiBase/prisma/seed.ts` (`npm run db:seed`, idempotente, con ids UUID
+   fijos porque los DTOs de citas validan `@IsUUID`): estados, horario de atención,
+   `ConfiguracionNegocio` y un catálogo de ejemplo. Reservar funciona de punta a punta.
+   **Hecho también:** `DATOS_QUEMADOS` y `apiBase/src/demo/` borrados — el interruptor
+   era una segunda fuente de verdad que un `.env` olvidado podía dejar encendida.
 2. Login real por teléfono con bcrypt, y `JWT_SECRET` sin fallback (`03-autorizacion.md`).
+   **Hecho:** `POST /auth/login`, `POST /auth/registro`, `GET /auth/me` y `PATCH /auth/me`
+   contra la base real, con `bcryptjs` (coste 12), rol en mayúsculas en todas las capas,
+   límite de intentos por IP en las dos rutas abiertas, y `JWT_SECRET` obligatorio con piso
+   de 32 caracteres. Pantallas de sesión, registro y perfil ya conectadas.
 3. Sobre de respuesta y filtro de errores (`04-contrato-api.md`) — antes de las pantallas, porque define
    qué puede mostrar el frontend.
+   **Hecho:** `SobreInterceptor` y `ExcepcionesFilter` globales. Lo que no es
+   `HttpException` sale como 500 genérico y su detalle solo va al log.
 4. Guard de propiedad (`03-autorizacion.md`).
 5. Reserva con transacción, y el resto de `CitasService` (`02-reservas-concurrencia.md`).
 6. Configuración de negocio, paleta nueva y pasada responsive (`05-marca-y-responsive.md`).

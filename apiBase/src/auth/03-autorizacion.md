@@ -139,3 +139,48 @@ Se unifica en mayúsculas, tomando el esquema como fuente:
 En el mismo paso se renombra la propiedad `role` a `rol` en `JwtPayload` y
 `AuthenticatedUser`: los nombres no se traducen entre capas. `sub`
 se queda como está, que es la claim estándar de JWT.
+
+## Superficie de cuenta · lo que el frontend ya consume
+
+Implementado y probado de punta a punta contra MariaDB.
+
+| Ruta | Acceso | Cuerpo | Respuesta |
+|---|---|---|---|
+| `POST /auth/login` | `@Public()` | `telefono`, `password` | `accessToken` + `usuario` |
+| `POST /auth/registro` | `@Public()` | `telefono`, `password`, `nombre`, `apellido?`, `email?` | `accessToken` + `usuario` |
+| `GET /auth/me` | cualquier rol, sobre sí mismo | — | `usuario` |
+| `PATCH /auth/me` | cualquier rol, sobre sí mismo | `nombre`, `apellido?`, `email?` | `usuario` |
+
+`usuario` es `{ id, telefono, nombre, apellido, email, rol }`. Nunca `password`.
+
+**El `rol` viaja en la respuesta además de en el token.** El token es la autoridad; esto es
+para que el navegador sepa qué enlaces pintar sin decodificar el JWT ni encadenar un
+`GET /auth/me` detrás del login. Por eso `me` también lo devuelve: al recargar la página el
+frontend solo tiene el token guardado, y decodificarlo en el cliente sería tratarlo como
+dato en vez de como credencial.
+
+**Registro.** El teléfono ya puede existir sin contraseña: es la ficha que crea una reserva
+de invitado. Registrarse sobre esa ficha **le pone contraseña y conserva sus citas** — es el
+caso normal, no un conflicto. El 409 «teléfono ya registrado» de `04-contrato-api.md` es
+solo para el teléfono que **ya tiene** contraseña. El rol siempre sale `CLIENTE`: no se
+acepta del cuerpo, o cualquiera se registra como administrador.
+
+**Perfil.** El teléfono no se edita: es la identidad, y cambiarlo por formulario sería
+apropiarse de la ficha de otro número. La contraseña tampoco se cambia todavía — falta
+decidir qué se pide para autorizarlo, y hacerlo sin pedir la actual convierte una sesión
+robada en una cuenta perdida.
+
+## Lo que quedó fuera, y por qué
+
+- **Cambio de contraseña.** Falta decidir qué se exige para autorizarlo. Hacerlo sin pedir
+  la contraseña actual convierte una sesión robada en una cuenta perdida.
+- **Revocación de sesiones.** `JwtStrategy` no consulta la base: el token dice quién es y
+  se cree. Desactivar una cuenta no corta las sesiones ya emitidas hasta que el token vence
+  (`JWT_EXPIRES_IN`, 1 día). Cerrarlo del todo pide una lista de revocación, que es una
+  consulta por petición.
+- **Verificación del teléfono.** Es la que sostendría todo lo demás: sin ella, reservar a
+  nombre ajeno y reclamar la ficha de un invitado siguen siendo posibles. El punto de
+  entrada es `AuthService.registro`.
+- **Límite de intentos compartido.** `LimiteIntentosGuard` cuenta en la memoria del
+  proceso: se reinicia con el API y no se comparte entre instancias. Alcanza para un
+  despliegue por negocio; con varias instancias hace falta un almacén común.
