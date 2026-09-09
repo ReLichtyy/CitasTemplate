@@ -1,7 +1,11 @@
 import { EstadoNotificacion } from '../generated/prisma/client.js';
 import { NotificacionesWorker } from './notificaciones.worker.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
-import type { WhatsappGateway } from './whatsapp.gateway.js';
+import {
+  CanalNoDisponibleError,
+  EnvioPermanenteError,
+  type WhatsappGateway,
+} from './whatsapp.gateway.js';
 import type { ConfigService } from '@nestjs/config';
 
 const FILA = {
@@ -12,18 +16,28 @@ const FILA = {
   variables: { nombre: 'Marta', enlace: 'https://app/citas/confirmar/abc' },
   estado: EstadoNotificacion.ENVIANDO,
   intentos: 1,
+  creadaEn: new Date(),
 };
 
 function crearWorker(
-  opciones: { intentos?: number; maxIntentos?: number; esWorker?: boolean } = {},
+  opciones: {
+    intentos?: number;
+    maxIntentos?: number;
+    esWorker?: boolean;
+    creadaEn?: Date;
+  } = {},
 ) {
   const tx = {
     $queryRaw: vi.fn().mockResolvedValue([{ id: 'not-1' }]),
     notificacionSalida: {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-      findMany: vi
-        .fn()
-        .mockResolvedValue([{ ...FILA, intentos: opciones.intentos ?? 1 }]),
+      findMany: vi.fn().mockResolvedValue([
+        {
+          ...FILA,
+          intentos: opciones.intentos ?? 1,
+          creadaEn: opciones.creadaEn ?? FILA.creadaEn,
+        },
+      ]),
     },
   };
 
@@ -131,5 +145,68 @@ describe('NotificacionesWorker', () => {
     await worker.drenar();
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Un numero sin WhatsApp no mejora por insistir. Antes se le daban los cuatro
+   * intentos —hora y cuarto de cola— para acabar en el mismo FALLIDA.
+   */
+  it('marca FALLIDA de una vez cuando el rechazo es del mensaje', async () => {
+    const { worker, prisma, gateway } = crearWorker();
+    gateway.enviar.mockRejectedValue(
+      new EnvioPermanenteError('numero sin whatsapp'),
+    );
+
+    await worker.drenar();
+
+    const { data } = prisma.notificacionSalida.update.mock.calls[0][0];
+    expect(data.estado).toBe(EstadoNotificacion.FALLIDA);
+    expect(data.ultimoError).toContain('numero sin whatsapp');
+  });
+
+  /**
+   * El corazon del arreglo: con la sesion caida, los avisos no pagan el intento. Sin
+   * esto una caida de veinte minutos vacia la cola entera en FALLIDA.
+   */
+  it('no consume intentos cuando el canal esta caido', async () => {
+    const { worker, prisma, gateway } = crearWorker({ intentos: 2 });
+    gateway.enviar.mockRejectedValue(
+      new CanalNoDisponibleError('sesion en STOPPED'),
+    );
+
+    await worker.drenar();
+
+    const { data } = prisma.notificacionSalida.update.mock.calls[0][0];
+    expect(data.estado).toBe(EstadoNotificacion.PENDIENTE);
+    // `reclamar` habia dejado 2; se devuelve al 1 con el que entro.
+    expect(data.intentos).toBe(1);
+    expect(data.proximoIntentoEn.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  /** Pero no para siempre: un aviso de ayer ya no avisa de nada. */
+  it('abandona la fila si el canal lleva mas de un dia caido', async () => {
+    const { worker, prisma, gateway } = crearWorker({
+      creadaEn: new Date(Date.now() - 25 * 3_600_000),
+    });
+    gateway.enviar.mockRejectedValue(
+      new CanalNoDisponibleError('sesion en STOPPED'),
+    );
+
+    await worker.drenar();
+
+    const { data } = prisma.notificacionSalida.update.mock.calls[0][0];
+    expect(data.estado).toBe(EstadoNotificacion.FALLIDA);
+  });
+
+  /** Un fallo que no se sabe clasificar conserva el retroceso exponencial de siempre. */
+  it('mantiene el reintento con retroceso para errores desconocidos', async () => {
+    const { worker, prisma, gateway } = crearWorker({ intentos: 2 });
+    gateway.enviar.mockRejectedValue(new Error('se cayo la red'));
+
+    await worker.drenar();
+
+    const { data } = prisma.notificacionSalida.update.mock.calls[0][0];
+    expect(data.estado).toBe(EstadoNotificacion.PENDIENTE);
+    expect(data.intentos).toBeUndefined();
   });
 });

@@ -8,10 +8,28 @@ import {
 } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ESPERA_MINUTOS } from './notificaciones.config.js';
-import { WhatsappGateway } from './whatsapp.gateway.js';
+import {
+  CanalNoDisponibleError,
+  EnvioPermanenteError,
+  WhatsappGateway,
+} from './whatsapp.gateway.js';
 
 /** Una fila ENVIANDO mas vieja que esto es un proceso que murio a mitad de envio. */
 const MINUTOS_RECLAMO_VENCIDO = 10;
+
+/**
+ * Espera fija mientras el canal esta caido, en minutos. No es el retroceso exponencial
+ * porque no hay nada que espaciar: el canal vuelve cuando alguien lo repara, y hasta
+ * entonces todas las filas estan igual de bloqueadas.
+ */
+const ESPERA_CANAL_CAIDO = 5;
+
+/**
+ * Techo de la espera con el canal caido. Sin el, un aviso reintentaria para siempre
+ * contra una sesion que nadie va a volver a parear. Un dia es de sobra: pasado eso, la
+ * cita ya ocurrio o alguien llamo por telefono.
+ */
+const HORAS_MAX_CANAL_CAIDO = 24;
 
 /**
  * Drena el outbox. Es el mismo binario que el API: `NOTIFICACIONES_WORKER=true`
@@ -128,8 +146,80 @@ export class NotificacionesWorker {
         },
       });
     } catch (error) {
-      await this.reprogramar(id, fila.intentos, this.mensaje(error));
+      await this.tratarFallo(fila, error);
     }
+  }
+
+  /**
+   * Las tres respuestas posibles a un envio fallido. Que sean tres y no una es la
+   * diferencia entre una cola que se recupera sola y una que se vacia en FALLIDA cada
+   * vez que la sesion de WhatsApp se cae media hora.
+   */
+  private async tratarFallo(
+    fila: NotificacionSalida,
+    error: unknown,
+  ): Promise<void> {
+    const motivo = this.mensaje(error);
+
+    // El canal rechazo este mensaje: reintentar da exactamente lo mismo.
+    if (error instanceof EnvioPermanenteError) {
+      this.logger.warn(`Notificacion ${fila.id} no entregable: ${motivo}`);
+      await this.prisma.notificacionSalida.update({
+        where: { id: fila.id },
+        data: {
+          estado: EstadoNotificacion.FALLIDA,
+          ultimoError: motivo,
+        },
+      });
+      return;
+    }
+
+    // El canal entero esta caido: el mensaje no tiene la culpa y no paga el intento.
+    if (error instanceof CanalNoDisponibleError) {
+      await this.esperarAlCanal(fila, motivo);
+      return;
+    }
+
+    await this.reprogramar(fila.id, fila.intentos, motivo);
+  }
+
+  /**
+   * Devuelve la fila a la cola **descontando el intento** que el reclamo le sumo, para
+   * que una caida del canal no consuma el presupuesto de reintentos del mensaje.
+   *
+   * El unico limite es la antiguedad: pasado `HORAS_MAX_CANAL_CAIDO` la fila muere,
+   * porque un aviso que lleva un dia esperando ya no avisa de nada.
+   */
+  private async esperarAlCanal(
+    fila: NotificacionSalida,
+    motivo: string,
+  ): Promise<void> {
+    const antiguedadHoras =
+      (Date.now() - fila.creadaEn.getTime()) / 3_600_000;
+
+    if (antiguedadHoras >= HORAS_MAX_CANAL_CAIDO) {
+      this.logger.error(
+        `Notificacion ${fila.id} abandonada tras ${HORAS_MAX_CANAL_CAIDO}h sin canal: ${motivo}`,
+      );
+      await this.prisma.notificacionSalida.update({
+        where: { id: fila.id },
+        data: { estado: EstadoNotificacion.FALLIDA, ultimoError: motivo },
+      });
+      return;
+    }
+
+    this.logger.warn(`Canal no disponible, se reintenta sin gastar intento: ${motivo}`);
+    await this.prisma.notificacionSalida.update({
+      where: { id: fila.id },
+      data: {
+        estado: EstadoNotificacion.PENDIENTE,
+        // `reclamar` ya lo incremento y `fila` se leyo despues, asi que este valor
+        // viene sumado: hay que restarlo para que el intento no se cuente.
+        intentos: Math.max(0, fila.intentos - 1),
+        ultimoError: motivo,
+        proximoIntentoEn: new Date(Date.now() + ESPERA_CANAL_CAIDO * 60_000),
+      },
+    });
   }
 
   /**

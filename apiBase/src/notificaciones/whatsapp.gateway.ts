@@ -20,6 +20,27 @@ export interface ResultadoEnvio {
 }
 
 /**
+ * El canal rechazo **este** mensaje y volver a mandarlo daria el mismo resultado: un
+ * numero sin WhatsApp, un destino con forma invalida.
+ *
+ * Existe porque sin esta distincion el worker reintenta cuatro veces contra un numero
+ * que nunca va a recibir nada —una hora y cuarto de cola ocupada— y llega a FALLIDA
+ * por agotamiento, que es el mismo estado final pero mucho mas tarde y con el error
+ * util enterrado bajo tres reintentos identicos.
+ */
+export class EnvioPermanenteError extends Error {}
+
+/**
+ * El canal entero no esta disponible: la sesion se cayo, WAHA no responde, la clave
+ * no sirve. No dice nada del mensaje.
+ *
+ * Se distingue porque **no debe consumir intentos**: si la sesion de WhatsApp esta
+ * caida veinte minutos, los cuatro intentos se agotan solos y avisos perfectamente
+ * validos mueren en FALLIDA por un problema que no era de ellos y que ya se resolvio.
+ */
+export class CanalNoDisponibleError extends Error {}
+
+/**
  * Clase abstracta y no `interface` a proposito: Nest necesita un token de inyeccion
  * que exista en tiempo de ejecucion.
  *

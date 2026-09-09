@@ -31,30 +31,60 @@ services:
   # que se escanee aqui, asi que ese numero es dedicado y desechable, nunca el
   # principal del negocio.
   waha:
-    image: devlikeapro/waha:latest-2026.8.2
+    # Variante `noweb`: websocket puro, sin Chromium. Se cambio desde `latest`
+    # (WEBJS) porque el navegador moria en pleno pareo con "Failed to re-inject
+    # after navigation auth timeout" y el telefono respondia "Couldn't link
+    # device". Sin navegador ese modo de fallo no existe, y la imagen pesa
+    # una fraccion. Se pierde /api/screenshot, que era solo para depurar.
+    image: devlikeapro/waha:noweb-2026.8.2
     container_name: citas-waha
     restart: unless-stopped
     env_file: .env
     environment:
-      # WAHA escucha en 3000 adentro del contenedor, igual que el API de citas en el
-      # host. No chocan porque afuera se publica en 3001; adentro nadie mas usa 3000.
-      WHATSAPP_API_KEY: ${WAHA_API_KEY}
+      # El HASH de la clave, no la clave. WAHA acepta `sha512:<hex>` y compara contra
+      # el hash, asi que el secreto en claro no vive en el entorno del contenedor ni
+      # sale en un `docker inspect`. El texto plano existe en un solo sitio:
+      # apiBase/.env, que es quien tiene que mandarlo en X-Api-Key.
+      WHATSAPP_API_KEY: ${WAHA_API_KEY_HASH}
+      # Panel del QR. Encendido en local, apagado en el VPS: es una interfaz con una
+      # sesion de WhatsApp detras, y ahi el pareo se hace por API.
+      WAHA_DASHBOARD_ENABLED: ${WAHA_DASHBOARD_ENABLED:-true}
       WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME}
       WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD}
+      # La referencia completa del API de WAHA, con su "probar ahora". Misma razon que
+      # /docs en el API de citas: fuera de produccion y nada mas.
+      WHATSAPP_SWAGGER_ENABLED: ${WAHA_SWAGGER_ENABLED:-true}
       # Al reiniciar el contenedor, las sesiones vuelven solas desde el volumen. Sin
       # esto habria que arrancarlas a mano despues de cada despliegue.
       WHATSAPP_RESTART_ALL_SESSIONS: "True"
-      WHATSAPP_DEFAULT_ENGINE: WEBJS
+      WHATSAPP_DEFAULT_ENGINE: NOWEB
+      # NOWEB no guarda contactos ni chats si no se le pide: sin esto, los
+      # mensajes salen igual pero el historial y la lista de contactos llegan vacios.
+      WHATSAPP_DEFAULT_ENGINE_NOWEB_STORE_ENABLED: "True"
+      # El sync completo baja meses de historial en cada arranque. Este servicio
+      # solo manda avisos de citas, no los necesita.
+      WHATSAPP_DEFAULT_ENGINE_NOWEB_STORE_FULLSYNC: "False"
       # Webhook hacia el API. El controlador ya existe: src/integrations/waha/.
       # En el VPS esta URL es la interna del API; el webhook no necesita salir a internet.
       WHATSAPP_HOOK_URL: http://host.docker.internal:3000/webhooks/whatsapp
       # Nada de `*`: cada evento suscrito es una peticion que el API tiene que atender y
       # descartar. `message` es la comodidad futura de responder por texto; `message.ack`
       # es lo que marca un aviso como entregado.
-      WHATSAPP_HOOK_EVENTS: message,message.ack
+      # `session.status` es el que avisa que la sesion se cayo. Sin el, una sesion
+      # muerta solo se nota cuando los mensajes empiezan a fallar, ya tarde.
+      WHATSAPP_HOOK_EVENTS: message,message.ack,session.status
       # Sin esta firma el API rechaza el webhook entero: la ruta es publica por fuerza.
       WHATSAPP_HOOK_HMAC_KEY: ${WAHA_HOOK_HMAC_KEY}
+      # El numero es de uso exclusivo del negocio: no hay grupos, ni estados, ni
+      # canales, ni difusiones que atender. Filtrarlos en el origen le quita al webhook
+      # trafico que solo puede ser ruido o superficie.
+      WAHA_SESSION_CONFIG_IGNORE_GROUPS: "True"
+      WAHA_SESSION_CONFIG_IGNORE_BROADCAST: "True"
+      WAHA_SESSION_CONFIG_IGNORE_STATUS: "True"
+      WAHA_SESSION_CONFIG_IGNORE_CHANNELS: "True"
     ports:
+      # WAHA escucha en 3000 adentro del contenedor, igual que el API de citas en el
+      # host. No chocan porque afuera se publica en 3001; adentro nadie mas usa 3000.
       # Solo loopback, y 3001 afuera para no chocar con el API de citas.
       # En el VPS esta linea se borra: WAHA queda en la red interna y nada mas.
       - "127.0.0.1:3001:3000"

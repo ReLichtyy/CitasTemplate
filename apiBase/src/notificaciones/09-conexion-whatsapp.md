@@ -183,9 +183,30 @@ reclamo.
 El `SELECT` devuelve ids, pero el lote se lee entero de una vez tras el `UPDATE`: leer
 cada fila por separado antes de enviarla era una consulta por mensaje.
 
-Reintentos con retroceso exponencial sobre `proximoIntentoEn` — 1 min, 5, 15, 60 —
-con tope. Al agotarlo, `FALLIDA`. Un mensaje reintentado para siempre contra un
-número inválido es un worker que nunca avanza.
+### Tres fallos distintos, tres respuestas distintas
+
+Reintentar todo por igual sale mal en las dos direcciones, así que el puerto declara
+dos errores —`EnvioPermanenteError` y `CanalNoDisponibleError`— y el adaptador traduce
+a ellos lo que devuelve el canal. El worker decide sin saber que existe WAHA:
+
+| Qué pasó | Ejemplo | Qué hace el worker |
+|---|---|---|
+| El canal rechazó **este** mensaje | número sin WhatsApp, destino con forma inválida, 4xx | `FALLIDA` de una vez |
+| El canal **entero** no está | sesión caída, WAHA sin responder, 401, 429 | vuelve a la cola **sin gastar intento**, cada 5 min, hasta 24 h |
+| Cualquier otra cosa | lo desconocido | retroceso exponencial: 1 min, 5, 15, 60, y `FALLIDA` al agotar |
+
+La fila del medio es la que importa y la que faltaba. Con la sesión de WhatsApp caída
+veinte minutos, el retroceso exponencial consume los cuatro intentos solo —81 minutos
+de espera acumulada— y avisos perfectamente válidos mueren en `FALLIDA` por un problema
+que no era de ellos y que ya se resolvió. Descontar el intento es lo que convierte una
+caída del canal en una demora en vez de una pérdida.
+
+El techo de 24 h existe porque lo contrario es reintentar para siempre contra una
+sesión que nadie va a volver a parear. Pasado un día el aviso ya no avisa de nada.
+
+El adaptador además **pregunta por el estado de la sesión antes de mandar** (cacheado
+15 s, porque el lote es de 20 y si no serían 20 consultas idénticas por pasada). Sin esa
+comprobación, con la sesión caída cada aviso se iba por el camino del fallo genérico.
 
 ## El enlace firmado
 
@@ -378,18 +399,28 @@ Servicio `waha` en el `docker-compose.yml` de la raíz.
 
 | | |
 |---|---|
-| Imagen | `devlikeapro/waha:latest-2026.8.2` |
+| Imagen | `devlikeapro/waha:noweb-2026.8.2` |
 | Tier | CORE (gratis) |
-| Motor | WEBJS — Chromium real adentro del contenedor |
+| Motor | NOWEB — websocket directo, sin navegador |
 | Contenedor | `citas-waha` |
 | Publicado en | `127.0.0.1:3001` |
 | Volumen | `waha-sessions` → `/app/.sessions` |
 
-**Ojo con el nombre del tag.** `latest-2026.8.2` no significa "la más nueva":
-`latest` es el nombre de la *variante* con Chromium incluido, y `2026.8.2` es la
-versión. Las otras variantes de esa misma versión son `noweb-2026.8.2` (websocket,
-sin navegador, mucho más liviana) y `gows-2026.8.2` (lo mismo en Go). Pedir
-`devlikeapro/waha:2026.8.2` a secas **no existe** y el `pull` falla.
+**Ojo con el nombre del tag.** `noweb-2026.8.2` no significa "la más nueva":
+`noweb` es el nombre de la *variante*, y `2026.8.2` es la versión. Las otras
+variantes de esa misma versión son `latest-2026.8.2` (Chromium incluido, motor
+WEBJS) y `gows-2026.8.2` (websocket en Go). Pedir `devlikeapro/waha:2026.8.2` a
+secas **no existe** y el `pull` falla.
+
+**Por qué NOWEB y no WEBJS.** WEBJS maneja un Chromium real y le inyecta scripts a
+la página de WhatsApp Web. En pleno pareo esa inyección se cayó
+(`Failed to re-inject after navigation auth timeout`), el navegador se desconectó y
+el teléfono cortó con *"Couldn't link device"*; cualquier `/api/screenshot` posterior
+devolvía 500 `TargetCloseError` porque ya no había página. NOWEB habla el protocolo
+por websocket, sin navegador: ese modo de fallo no existe, arranca en segundos y come
+mucha menos RAM. El costo es que `/api/screenshot` desaparece — era solo para depurar
+— y que el store de contactos/chats hay que pedirlo explícito
+(`WHATSAPP_DEFAULT_ENGINE_NOWEB_STORE_ENABLED`).
 
 Se fija la versión por lo mismo que MariaDB: la de tu máquina y la del VPS tienen que
 ser la misma, o terminas depurando diferencias que no están en tu código.
@@ -418,6 +449,20 @@ no aporta nada y abre lo que dice la sección siguiente.
 `WHATSAPP_API_KEY` es obligatoria y viaja en la cabecera **`X-Api-Key`** en cada
 petición. Verificado: sin clave y con clave incorrecta, `401`.
 
+**El contenedor recibe el hash, no la clave.** WAHA acepta `sha512:<hex>` y compara
+contra él, así que el secreto en claro no vive en el entorno del contenedor ni sale en
+un `docker inspect`. El texto plano existe en un solo archivo, `apiBase/.env`, que es
+quien tiene que mandarlo en la cabecera. Verificado: el propio hash usado como clave
+también da `401`.
+
+Esto importa más de lo que parece porque el `.env` de la raíz se inyecta **entero** al
+contenedor con `env_file`. Mientras ahí hubiera un `WAHA_API_KEY` sin hashear, el hash
+no servía de nada. Se genera así:
+
+```bash
+node -e "console.log('sha512:'+require('crypto').createHash('sha512').update('LA-CLAVE').digest('hex'))"
+```
+
 Es la única autenticación que tiene. Y responde con `Access-Control-Allow-Origin: *`,
 así que expuesto a internet cualquier página web puede pegarle desde el navegador de
 un visitante. **Quien alcance ese puerto manda WhatsApp con el número del negocio.**
@@ -425,6 +470,16 @@ De ahí que el mapeo sea a loopback en local, y que en el VPS no se publique.
 
 El panel (`/dashboard`) tiene credenciales aparte: `WAHA_DASHBOARD_USERNAME` y
 `WAHA_DASHBOARD_PASSWORD`. Por defecto son `waha`/`waha`; están sobrescritas.
+
+El panel y la referencia del API de WAHA se apagan por variable —`WAHA_DASHBOARD_ENABLED`
+y `WAHA_SWAGGER_ENABLED`—: encendidos en local, apagados en el VPS. Es la misma decisión
+que `/docs` en el API de citas. Con el panel apagado, el pareo se hace por
+`/api/{session}/auth/qr`.
+
+También se filtran en el origen los eventos que el número no usa
+(`WAHA_SESSION_CONFIG_IGNORE_GROUPS`, `_BROADCAST`, `_STATUS`, `_CHANNELS`): es un
+número dedicado al negocio, y todo lo demás que llegara al webhook solo puede ser ruido
+o superficie.
 
 Las tres claves (`WAHA_API_KEY`, la del panel y `WAHA_HOOK_HMAC_KEY`) se generaron
 aleatorias y viven en el `.env` de la **raíz**, que es un archivo distinto del de
