@@ -63,6 +63,12 @@ No test runner is configured yet in Template.
   esa carpeta**, salvo el `useFactory` de `notificaciones.module.ts`, que es la raíz de
   composición. Sin `WAHA_URL` se usa un gateway que escribe al log y todo lo demás
   funciona igual. Detalles y estado: `apiBase/src/notificaciones/09-conexion-whatsapp.md`.
+- **`CatalogoService`** (`src/catalogo/`) is `@Global()` like `PrismaModule`, and is the only
+  place `ConfiguracionNegocio` (the single id=1 row) and the `EstadoCita` catalog are read
+  from. It caches both for 60 s and always reads through `PrismaService`, **never** through a
+  caller's `tx` — these are configuration, not data the booking transaction races over, and
+  keeping them out of it is the point. Add a `catalogo.invalidar()` call to whatever handler
+  eventually edits either table.
 - **`SyncModule`** (`src/sync/`) is the integration point for the external API sync:
   - `external-api.config.ts` — registers the `externalApi` config namespace from env vars (`EXTERNAL_API_BASE_URL`, `EXTERNAL_API_KEY`, `EXTERNAL_API_TIMEOUT_MS`, `EXTERNAL_API_SYNC_CRON`).
   - `external-api.client.ts` — generic authenticated HTTP client (`get`/`post`) wrapping `@nestjs/axios`, reads base URL/key from `ConfigService`.

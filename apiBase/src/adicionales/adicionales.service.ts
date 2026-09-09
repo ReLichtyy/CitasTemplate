@@ -11,11 +11,11 @@ export class AdicionalesService {
     throw new NotImplementedException(`Adicional ${id} lookup not implemented`);
   }
 
-  create(dto: unknown) {
+  create(_dto: unknown) {
     throw new NotImplementedException('Adicional creation not implemented');
   }
 
-  update(id: string, dto: unknown) {
+  update(id: string, _dto: unknown) {
     throw new NotImplementedException(`Adicional ${id} update not implemented`);
   }
 

@@ -1,8 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { apiReference } from '@scalar/nestjs-api-reference';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { ExcepcionesFilter } from './common/filters/excepciones.filter.js';
@@ -88,6 +86,12 @@ async function bootstrap() {
    * administracion incluidas. Solo fuera de produccion.
    */
   if (!esProduccion) {
+    // Import dinamico: `@nestjs/swagger` y Scalar solo hacen falta aqui, y en
+    // produccion este bloque no corre. Arriba se cargaban siempre, en el arranque del
+    // proceso que nunca va a servir /docs.
+    const { DocumentBuilder, SwaggerModule } = await import('@nestjs/swagger');
+    const { apiReference } = await import('@scalar/nestjs-api-reference');
+
     const config = new DocumentBuilder()
       .setTitle('CitasTemplate API')
       .setDescription('API para gestion de citas')

@@ -56,8 +56,46 @@ export type CitaPorConfirmar = {
   confirmada: boolean;
 };
 
+/**
+ * Lo que devuelve `GET /citas`. La paginacion viaja **dentro** de `data`, no como
+ * hermano del sobre `{ success, data, message }`. Ver `apiBase/src/common/04-contrato-api.md`.
+ *
+ * `total` es el conteo con los mismos filtros que la pagina, no el de la tabla entera:
+ * es lo que permite pintar "50 de 214" sin una segunda llamada.
+ */
+export type PaginaCitas<T = unknown> = {
+  items: T[];
+  total: number;
+  pagina: number;
+  /** Base cero. */
+  limite: number;
+};
+
+export type FiltroCitas = {
+  /** Inclusive, ISO 8601. */
+  desde?: string;
+  /** Exclusive, ISO 8601. */
+  hasta?: string;
+  pagina?: number;
+  /** El API lo topa en 100; si no se manda, usa 50. */
+  limite?: number;
+};
+
+function comoQuery(filtro: FiltroCitas = {}): string {
+  const params = new URLSearchParams();
+  for (const [clave, valor] of Object.entries(filtro)) {
+    if (valor !== undefined) {
+      params.set(clave, String(valor));
+    }
+  }
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
 export const citasService = {
-  list: () => apiClient.get('/citas'),
+  // Siempre paginada: el API no devuelve la agenda entera ni aunque no se le pida nada.
+  list: (filtro?: FiltroCitas) =>
+    apiClient.get<PaginaCitas>(`/citas${comoQuery(filtro)}`),
   get: (id: string) => apiClient.get(`/citas/${id}`),
   // La disponibilidad la calcula el servidor: aqui no se simula ni se adivina.
   disponibilidad: (params: { empleadoId: string; servicioId: string; fecha: string }) =>

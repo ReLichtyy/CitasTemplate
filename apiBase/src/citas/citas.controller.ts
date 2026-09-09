@@ -19,6 +19,7 @@ import { Role } from '../common/enums/role.enum.js';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface.js';
 import { CitasService } from './citas.service.js';
 import { ActualizarCitaDto } from './dto/actualizar-cita.dto.js';
+import { ConsultarCitasDto } from './dto/consultar-citas.dto.js';
 import { CancelarCitaDto } from './dto/cancelar-cita.dto.js';
 import { ConsultarDisponibilidadDto } from './dto/consultar-disponibilidad.dto.js';
 import { ReservarCitaDto } from './dto/reservar-cita.dto.js';
@@ -32,13 +33,23 @@ export class CitasController {
   // El filtrado por propiedad de una lista no lo puede hacer el guard, que solo ve
   // un id de ruta: va en la consulta de CitasService.findAll.
   @Get()
-  findAll(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.findAll(user);
+  findAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ConsultarCitasDto,
+  ) {
+    return this.service.findAll(user, query);
   }
 
   // Publica porque un invitado tiene que ver horarios antes de decidir si reserva.
   // Antes de @Get(':id'), o 'disponibilidad' se leeria como un id.
+  //
+  // Con freno por IP: es la unica ruta abierta que hace trabajo de verdad —cuatro
+  // consultas y un barrido de la jornada por peticion— y la regla del CLAUDE.md es que
+  // toda ruta @Public() que cueste trabajo lo lleve. El numero es holgado: una pagina de
+  // reserva consulta un dia por clic mientras el cliente compara horarios.
   @Public()
+  @UseGuards(LimiteIntentosGuard)
+  @LimiteIntentos({ intentos: 120, ventanaMs: 10 * 60_000 })
   @Get('disponibilidad')
   disponibilidad(@Query() query: ConsultarDisponibilidadDto) {
     return this.service.disponibilidad(query);

@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CatalogoService } from '../catalogo/catalogo.service.js';
 import { Role } from '../common/enums/role.enum.js';
 import {
-  instanteDesdeZona,
+  diaEnZona,
   partesEnZona,
   seTraslapan,
   sumarMinutos,
@@ -20,6 +20,10 @@ import { normalizarTelefono } from '../common/telefono.js';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface.js';
 import type { ActualizarCitaDto } from './dto/actualizar-cita.dto.js';
 import type { CancelarCitaDto } from './dto/cancelar-cita.dto.js';
+import {
+  LIMITE_POR_DEFECTO,
+  type ConsultarCitasDto,
+} from './dto/consultar-citas.dto.js';
 import type { ConsultarDisponibilidadDto } from './dto/consultar-disponibilidad.dto.js';
 import type { ReservarCitaDto } from './dto/reservar-cita.dto.js';
 import { OutboxService } from '../notificaciones/outbox.service.js';
@@ -106,13 +110,52 @@ export class CitasService {
   /**
    * El filtrado por propiedad de una lista no lo puede hacer el guard, que solo ve
    * un id de ruta: aqui va en la consulta. Ver 03-autorizacion.md.
+   *
+   * La lista siempre viene acotada. Sin cota, un ADMIN se llevaba todas las citas
+   * historicas del negocio con las seis relaciones de `INCLUIR_CITA` colgando de cada
+   * una. El total viaja aparte para que el frontend sepa que hay mas, y la paginacion
+   * va **dentro** de `data`, no como hermano del sobre. Ver 04-contrato-api.md.
    */
-  async findAll(user: AuthenticatedUser) {
-    return this.prisma.cita.findMany({
-      where: await this.filtroPorPropiedad(user),
-      include: INCLUIR_CITA,
-      orderBy: { inicio: 'asc' },
-    });
+  async findAll(user: AuthenticatedUser, query: ConsultarCitasDto = {}) {
+    const limite = query.limite ?? LIMITE_POR_DEFECTO;
+    const pagina = query.pagina ?? 0;
+
+    const where: Prisma.CitaWhereInput = {
+      ...(await this.filtroPorPropiedad(user)),
+      ...this.rangoDeFechas(query),
+    };
+
+    // Las dos consultas comparten `where` a proposito: un total que no case con la
+    // pagina es peor que no tener total.
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.cita.findMany({
+        where,
+        include: INCLUIR_CITA,
+        orderBy: { inicio: 'asc' },
+        skip: pagina * limite,
+        take: limite,
+      }),
+      this.prisma.cita.count({ where }),
+    ]);
+
+    return { items, total, pagina, limite };
+  }
+
+  /**
+   * `desde` es inclusive y `hasta` exclusive, la misma convencion semiabierta que usa
+   * el traslape de horarios. Se filtra por `inicio`, que es lo que los dos indices de
+   * `Cita` llevan como segunda columna.
+   */
+  private rangoDeFechas(query: ConsultarCitasDto): Prisma.CitaWhereInput {
+    if (!query.desde && !query.hasta) {
+      return {};
+    }
+    return {
+      inicio: {
+        ...(query.desde ? { gte: new Date(query.desde) } : {}),
+        ...(query.hasta ? { lt: new Date(query.hasta) } : {}),
+      },
+    };
   }
 
   /** La propiedad de esta cita ya la comprobo PropiedadCitaGuard. */
@@ -379,8 +422,14 @@ export class CitasService {
     }
     this.verificarServicioYEmpleado(servicio, empleado);
 
-    const inicioDia = instanteDesdeZona(anio, mes, dia, 0, zona);
-    const finDia = instanteDesdeZona(anio, mes, dia + 1, 0, zona);
+    // Resuelve la zona una vez para todo el dia en vez de una vez por hueco: la version
+    // anterior llamaba a `Intl` dos veces por hueco ofrecido. Los dias con cambio de
+    // horario caen solos al camino exacto. Ver `diaEnZona`.
+    const {
+      medianoche: inicioDia,
+      finDelDia: finDia,
+      hora,
+    } = diaEnZona(anio, mes, dia, zona);
     const { diaSemana } = partesEnZona(inicioDia, zona);
 
     const [franjas, restricciones, ocupadas] = await Promise.all([
@@ -409,14 +458,13 @@ export class CitasService {
 
     const ahora = Date.now();
     const slots: { inicio: string; fin: string }[] = [];
-
     for (const franja of franjas) {
       for (
         let minuto = franja.minutoApertura;
         minuto + servicio.duracionMinutos <= franja.minutoCierre;
         minuto += PASO_MINUTOS
       ) {
-        const inicio = instanteDesdeZona(anio, mes, dia, minuto, zona);
+        const inicio = hora(minuto);
         const fin = sumarMinutos(inicio, servicio.duracionMinutos);
 
         // Filtro de listado, no una sexta regla: ofrecer un horario ya pasado no es

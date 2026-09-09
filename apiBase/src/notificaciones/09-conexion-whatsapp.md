@@ -167,7 +167,21 @@ FOR UPDATE SKIP LOCKED;
 
 `SKIP LOCKED` existe en MariaDB desde 10.6 y el despliegue está fijado en 11.4, así
 que se puede usar. El reclamo (`PENDIENTE → ENVIANDO`) va en una transacción corta;
-el envío ocurre después, ya fuera.
+el envío ocurre después, ya fuera. Ese mismo `UPDATE` **resella `proximoIntentoEn` con
+el instante del reclamo**, y esa es la parte que no es obvia: `SKIP LOCKED` solo protege
+mientras la transacción del reclamo está abierta, y se cierra antes de enviar. Con la fila
+en `ENVIANDO`, `proximoIntentoEn` deja de significar "cuándo toca reintentar" y pasa a
+significar "desde cuándo cuenta este reclamo", que es contra lo que el barrido de reclamos
+colgados mide sus diez minutos.
+
+Sin ese resellado había un camino a mensaje duplicado: una fila con retraso —cola
+acumulada, o un reintento programado hace una hora— se reclama con `proximoIntentoEn` ya
+vencido, y el barrido de **otro** worker la devuelve a `PENDIENTE` mientras el primero
+todavía la está enviando. El barrido medía contra la programación en vez de contra el
+reclamo.
+
+El `SELECT` devuelve ids, pero el lote se lee entero de una vez tras el `UPDATE`: leer
+cada fila por separado antes de enviarla era una consulta por mensaje.
 
 Reintentos con retroceso exponencial sobre `proximoIntentoEn` — 1 min, 5, 15, 60 —
 con tope. Al agotarlo, `FALLIDA`. Un mensaje reintentado para siempre contra un

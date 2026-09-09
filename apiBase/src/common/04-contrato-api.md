@@ -12,8 +12,16 @@ Toda respuesta del API tiene la misma forma:
 ```
 
 Lo arma un interceptor global en caso de éxito y un filtro de excepciones en caso de error.
-**Ningún controlador construye su propio formato.** Las listas van en `data` como arreglo;
-si algún día llevan paginación, va dentro de `data`, no como hermano del sobre.
+**Ningún controlador construye su propio formato.** Las listas van en `data` como arreglo,
+y cuando llevan paginación va dentro de `data`, nunca como hermano del sobre.
+
+`GET /citas` ya la lleva, y devuelve `{ items, total, pagina, limite }` dentro de `data`.
+No es una comodidad: sin cota, un ADMIN pedía `/citas` y el API cargaba todas las citas
+históricas del negocio con las seis relaciones de cada una colgando. El techo son 100 por
+página y el defecto 50, y `total` se cuenta con el **mismo** `where` que la página —un
+total que no case con lo que se devuelve es peor que no tener total. Los filtros `desde`
+(inclusive) y `hasta` (exclusive) siguen la misma convención semiabierta que el traslape
+de horarios.
 
 ## Errores
 

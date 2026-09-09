@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { EstadoNotificacion, type Prisma } from '../generated/prisma/client.js';
+import {
+  EstadoNotificacion,
+  type NotificacionSalida,
+  type Prisma,
+} from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ESPERA_MINUTOS } from './notificaciones.config.js';
 import { WhatsappGateway } from './whatsapp.gateway.js';
@@ -41,9 +45,8 @@ export class NotificacionesWorker {
     try {
       await this.liberarReclamosVencidos();
 
-      const ids = await this.reclamar();
-      for (const id of ids) {
-        await this.enviarUna(id);
+      for (const fila of await this.reclamar()) {
+        await this.enviarUna(fila);
       }
     } catch (error) {
       this.logger.error(`Fallo la pasada del outbox: ${this.mensaje(error)}`);
@@ -55,8 +58,11 @@ export class NotificacionesWorker {
   /**
    * El reclamo (`PENDIENTE → ENVIANDO`) va en una transaccion corta; el envio ocurre
    * despues, ya fuera. La llamada HTTP nunca entra en una transaccion.
+   *
+   * Devuelve las filas completas y no sus ids: leerlas una por una despues era una
+   * consulta por mensaje, y el lote ya esta identificado aqui.
    */
-  private async reclamar(): Promise<string[]> {
+  private async reclamar(): Promise<NotificacionSalida[]> {
     const lote = this.config.get<number>('notificaciones.lote') ?? 20;
 
     return this.prisma.$transaction(async (tx) => {
@@ -77,19 +83,29 @@ export class NotificacionesWorker {
         data: {
           estado: EstadoNotificacion.ENVIANDO,
           intentos: { increment: 1 },
+          /**
+           * Sella el instante del reclamo. Mientras la fila esta ENVIANDO,
+           * `proximoIntentoEn` deja de significar "cuando toca reintentar" y pasa a
+           * significar "desde cuando cuenta este reclamo", que es lo que mira
+           * `liberarReclamosVencidos`.
+           *
+           * Sin esto, una fila con retraso —cola acumulada, o un reintento programado
+           * hace una hora— se reclama con `proximoIntentoEn` ya vencido, y el barrido
+           * de otro worker la devuelve a PENDIENTE mientras el primero todavia la esta
+           * enviando: dos mensajes al mismo numero. El `SKIP LOCKED` no cubre eso,
+           * porque el lock se suelta al cerrar la transaccion del reclamo.
+           */
+          proximoIntentoEn: new Date(),
         },
       });
-      return ids;
+
+      // Una sola consulta para el lote entero.
+      return tx.notificacionSalida.findMany({ where: { id: { in: ids } } });
     });
   }
 
-  private async enviarUna(id: string): Promise<void> {
-    const fila = await this.prisma.notificacionSalida.findUnique({
-      where: { id },
-    });
-    if (!fila) {
-      return;
-    }
+  private async enviarUna(fila: NotificacionSalida): Promise<void> {
+    const id = fila.id;
 
     try {
       const { idExterno } = await this.gateway.enviar(
@@ -154,6 +170,11 @@ export class NotificacionesWorker {
    * Un proceso que muere despues de reclamar deja la fila en ENVIANDO para siempre.
    * Se devuelve a la cola: reintentar un mensaje que quiza salio es preferible a no
    * volver a mirarlo nunca, y el intento ya quedo contado.
+   *
+   * La ventana se mide contra el instante del **reclamo**, que es lo que `reclamar`
+   * sella en `proximoIntentoEn`, y no contra la hora a la que el mensaje estaba
+   * programado. Medirla contra la programacion soltaba filas que se estaban enviando
+   * en ese momento.
    */
   private async liberarReclamosVencidos(): Promise<void> {
     const limite = new Date(Date.now() - MINUTOS_RECLAMO_VENCIDO * 60_000);

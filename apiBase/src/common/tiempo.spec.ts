@@ -1,5 +1,6 @@
 import {
   desplazamientoZonaMs,
+  diaEnZona,
   instanteDesdeZona,
   partesEnZona,
   seTraslapan,
@@ -101,6 +102,51 @@ describe('instanteDesdeZona', () => {
   it('normaliza el dia siguiente, que es como se calcula el fin del dia', () => {
     expect(instanteDesdeZona(2026, 9, 30 + 1, 0, 'UTC').toISOString()).toBe(
       '2026-10-01T00:00:00.000Z',
+    );
+  });
+});
+
+describe('diaEnZona', () => {
+  it('expone los dos extremos del dia, semiabierto', () => {
+    const { medianoche, finDelDia } = diaEnZona(2026, 9, 7, 'America/Costa_Rica');
+    expect(medianoche.toISOString()).toBe('2026-09-07T06:00:00.000Z');
+    expect(finDelDia.toISOString()).toBe('2026-09-08T06:00:00.000Z');
+  });
+
+  it('da lo mismo que instanteDesdeZona en un dia normal', () => {
+    const zona = 'America/Costa_Rica';
+    const { hora } = diaEnZona(2026, 9, 7, zona);
+
+    for (const minutos of [0, 15, 9 * 60, 13 * 60 + 45, 23 * 60 + 45]) {
+      expect(hora(minutos).toISOString()).toBe(
+        instanteDesdeZona(2026, 9, 7, minutos, zona).toISOString(),
+      );
+    }
+  });
+
+  /**
+   * El dia que el atajo aritmetico rompe: el 8 de marzo de 2026 dura 23 horas en
+   * Nueva York. Sumar minutos a la medianoche correria una hora todo lo que va
+   * despues del salto, y la agenda ofreceria horarios que no existen.
+   */
+  it('cae al camino exacto el dia que cambia el horario de verano', () => {
+    const zona = 'America/New_York';
+    const { hora } = diaEnZona(2026, 3, 8, zona);
+
+    // Antes del salto (EST, -5) y despues (EDT, -4).
+    expect(hora(60).toISOString()).toBe('2026-03-08T06:00:00.000Z');
+    expect(hora(13 * 60).toISOString()).toBe('2026-03-08T17:00:00.000Z');
+    expect(hora(13 * 60).toISOString()).toBe(
+      instanteDesdeZona(2026, 3, 8, 13 * 60, zona).toISOString(),
+    );
+  });
+
+  it('tambien acierta el dia de 25 horas', () => {
+    const zona = 'America/New_York';
+    const { hora } = diaEnZona(2026, 11, 1, zona);
+
+    expect(hora(13 * 60).toISOString()).toBe(
+      instanteDesdeZona(2026, 11, 1, 13 * 60, zona).toISOString(),
     );
   });
 });

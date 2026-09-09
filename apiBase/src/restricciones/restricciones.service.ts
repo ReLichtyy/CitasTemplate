@@ -11,11 +11,11 @@ export class RestriccionesService {
     throw new NotImplementedException(`Restriccion ${id} lookup not implemented`);
   }
 
-  create(dto: unknown) {
+  create(_dto: unknown) {
     throw new NotImplementedException('Restriccion creation not implemented');
   }
 
-  update(id: string, dto: unknown) {
+  update(id: string, _dto: unknown) {
     throw new NotImplementedException(`Restriccion ${id} update not implemented`);
   }
 

@@ -36,6 +36,12 @@ backend; los specs de cada módulo (`prisma/01-…`, `src/citas/02-…`, `src/au
 - `Cita.slotOcupado` es espejo de `inicio` mientras el estado bloquee disponibilidad, y
   `NULL` cuando no. Todo cambio de estado lo mantiene, en la misma transacción.
 - Verificar e insertar una cita van dentro de una `$transaction`.
+- Dentro de una `$transaction` no se lee configuración. `ConfiguracionNegocio` y
+  `EstadoCita` son catálogo, no datos de la carrera: los sirve `CatalogoService`
+  (`src/catalogo/`, global) desde su caché, leyendo por `PrismaService` y nunca por el
+  `tx` del llamador. Cada consulta de más ahí es tiempo de lock, y por tanto tasa de
+  conflicto entre dos personas que pulsan el mismo horario.
+- Toda ruta que liste devuelve una página acotada, no la tabla. Ver `04-contrato-api.md`.
 - Ninguna llamada de red va dentro de una `$transaction`. Lo que entra es la intencion
   —una fila en `NotificacionSalida`—; el envio lo hace el worker despues y reintenta.
   Un aviso que falla no puede reventar una reserva valida.

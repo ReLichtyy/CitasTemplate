@@ -130,6 +130,7 @@ function crearPrisma() {
       findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
       // Devuelve tambien lo que traeria el `include`, que es lo que lee el
       // comprobante de invitado.
       create: vi.fn(async ({ data }: { data: object }) => ({
@@ -151,7 +152,12 @@ function crearPrisma() {
 
   const prisma = {
     ...tx,
-    $transaction: vi.fn(async (cb: (t: typeof tx) => unknown) => cb(tx)),
+    // `$transaction` acepta las dos formas de Prisma: la interactiva, con retrollamada,
+    // y la de lote, con un arreglo de promesas — que es la que usa `findAll` para que
+    // la pagina y el total salgan de la misma foto.
+    $transaction: vi.fn(async (arg: ((t: typeof tx) => unknown) | unknown[]) =>
+      Array.isArray(arg) ? Promise.all(arg) : arg(tx),
+    ),
   };
 
   return { prisma: prisma as unknown as PrismaService, tx };
@@ -482,6 +488,63 @@ describe('CitasService.cancelar', () => {
 });
 
 describe('CitasService.findAll', () => {
+  /**
+   * Sin cota, un ADMIN se llevaba la agenda historica completa con las seis relaciones
+   * de cada cita colgando. El techo va en el servicio y no solo en el DTO: una llamada
+   * sin query tambien tiene que quedar acotada.
+   */
+  it('acota la lista aunque no se pida paginacion', async () => {
+    const { prisma, tx } = crearPrisma();
+
+    const pagina = await crearServicio(prisma).servicio.findAll(ADMIN);
+
+    const args = tx.cita.findMany.mock.calls[0][0];
+    expect(args.take).toBe(50);
+    expect(args.skip).toBe(0);
+    expect(pagina).toMatchObject({ total: 0, pagina: 0, limite: 50 });
+  });
+
+  it('traduce pagina y limite a skip y take', async () => {
+    const { prisma, tx } = crearPrisma();
+
+    await crearServicio(prisma).servicio.findAll(ADMIN, { pagina: 3, limite: 20 });
+
+    const args = tx.cita.findMany.mock.calls[0][0];
+    expect(args.skip).toBe(60);
+    expect(args.take).toBe(20);
+  });
+
+  /** Semiabierto, igual que el traslape: `desde` entra, `hasta` no. */
+  it('filtra por rango de fechas sin perder el filtro de propiedad', async () => {
+    const { prisma, tx } = crearPrisma();
+
+    await crearServicio(prisma).servicio.findAll(CLIENTE, {
+      desde: '2026-09-01T00:00:00.000Z',
+      hasta: '2026-10-01T00:00:00.000Z',
+    });
+
+    expect(tx.cita.findMany.mock.calls[0][0].where).toEqual({
+      clienteId: 'usr-cli',
+      inicio: {
+        gte: new Date('2026-09-01T00:00:00.000Z'),
+        lt: new Date('2026-10-01T00:00:00.000Z'),
+      },
+    });
+  });
+
+  /** Un total que no case con la pagina es peor que no tener total. */
+  it('cuenta con el mismo where que la pagina', async () => {
+    const { prisma, tx } = crearPrisma();
+
+    await crearServicio(prisma).servicio.findAll(CLIENTE, {
+      desde: '2026-09-01T00:00:00.000Z',
+    });
+
+    expect(tx.cita.count.mock.calls[0][0].where).toEqual(
+      tx.cita.findMany.mock.calls[0][0].where,
+    );
+  });
+
   it('acota la lista al dueño segun el rol', async () => {
     const admin = crearPrisma();
     await crearServicio(admin.prisma).servicio.findAll(ADMIN);

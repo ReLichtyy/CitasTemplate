@@ -11,11 +11,11 @@ export class HorariosService {
     throw new NotImplementedException(`Horario ${id} lookup not implemented`);
   }
 
-  create(dto: unknown) {
+  create(_dto: unknown) {
     throw new NotImplementedException('Horario creation not implemented');
   }
 
-  update(id: string, dto: unknown) {
+  update(id: string, _dto: unknown) {
     throw new NotImplementedException(`Horario ${id} update not implemented`);
   }
 

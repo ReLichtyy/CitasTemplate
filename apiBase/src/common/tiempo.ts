@@ -110,6 +110,51 @@ export function instanteDesdeZona(
 }
 
 /**
+ * Un dia de calendario resuelto en una zona: sus dos extremos y un constructor de horas
+ * de pared, pensado para recorrer los horarios de ese dia sin volver a preguntarle la
+ * zona a `Intl` en cada paso.
+ *
+ * `instanteDesdeZona` cuesta dos `formatToParts` por llamada, y la disponibilidad la
+ * invoca una vez por hueco: una jornada de ocho horas con paso de quince minutos son
+ * mas de cien llamadas a `Intl` por peticion, en una ruta publica.
+ *
+ * Casi todos los dias tienen un desplazamiento constante, y entonces la hora de pared es
+ * aritmetica pura sobre la medianoche. Los dias en que cambia el horario de verano no lo
+ * son —duran 23 o 25 horas—, asi que se detectan comparando el desplazamiento al empezar
+ * y al terminar el dia, y esos caen al camino exacto de siempre. Rapido donde se puede,
+ * correcto donde importa.
+ */
+export interface DiaEnZona {
+  /** Instante de las 00:00 de ese dia. */
+  medianoche: Date;
+  /** Instante de las 00:00 del dia siguiente: el fin semiabierto del dia. */
+  finDelDia: Date;
+  /** El instante de una hora de pared del dia, en minutos desde medianoche. */
+  hora(minutos: number): Date;
+}
+
+export function diaEnZona(
+  anio: number,
+  mes: number,
+  dia: number,
+  zona: string,
+): DiaEnZona {
+  const medianoche = instanteDesdeZona(anio, mes, dia, 0, zona);
+  const finDelDia = instanteDesdeZona(anio, mes, dia + 1, 0, zona);
+
+  const constante =
+    finDelDia.getTime() - medianoche.getTime() === 24 * 60 * MS_POR_MINUTO;
+
+  return {
+    medianoche,
+    finDelDia,
+    hora: constante
+      ? (minutos) => new Date(medianoche.getTime() + minutos * MS_POR_MINUTO)
+      : (minutos) => instanteDesdeZona(anio, mes, dia, minutos, zona),
+  };
+}
+
+/**
  * Traslape de dos intervalos semiabiertos [inicio, fin).
  * Los extremos que se tocan no traslapan: una cita que termina 10:00 y otra que
  * empieza 10:00 conviven. Ver 02-reservas-concurrencia.md.
