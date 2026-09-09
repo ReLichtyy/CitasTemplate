@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { Role } from '../common/enums/role.enum.js';
 import { CitasService } from './citas.service.js';
+import type { CatalogoService } from '../catalogo/catalogo.service.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import type { AuthenticatedUser } from '../auth/jwt-payload.interface.js';
 import type { ReservarCitaDto } from './dto/reservar-cita.dto.js';
@@ -12,6 +13,7 @@ const INICIO = '2026-09-07T10:00:00.000Z';
 
 const SERVICIO = {
   id: 'srv-1',
+  nombre: 'Corte',
   activo: true,
   duracionMinutos: 60,
   precio: new Prisma.Decimal('50.00'),
@@ -162,8 +164,18 @@ function crearPrisma() {
  */
 function crearServicio(prisma: PrismaService) {
   const outbox = { encolarConfirmacion: vi.fn().mockResolvedValue(true) };
-  const servicio = new CitasService(prisma, outbox as unknown as OutboxService);
-  return { servicio, outbox };
+  // La zona y el catalogo de estados ya no se leen dentro de la transaccion: los sirve
+  // `CatalogoService`, que cachea las dos tablas de configuracion.
+  const catalogo = {
+    zonaHoraria: vi.fn().mockResolvedValue('UTC'),
+    estado: vi.fn(async (codigo: string) => ESTADOS[codigo]),
+  };
+  const servicio = new CitasService(
+    prisma,
+    outbox as unknown as OutboxService,
+    catalogo as unknown as CatalogoService,
+  );
+  return { servicio, outbox, catalogo };
 }
 
 describe('CitasService.reservar', () => {
@@ -177,6 +189,22 @@ describe('CitasService.reservar', () => {
     // El estado inicial bloquea, asi que slotOcupado es espejo de inicio. Ver 02-reservas-concurrencia.md.
     expect(data.slotOcupado).toEqual(data.inicio);
     expect(data.estadoId).toBe(PENDIENTE.id);
+  });
+
+  /**
+   * Lo que esta prueba protege no es un resultado sino el **tamaño** de la
+   * transaccion. `ConfiguracionNegocio` y `EstadoCita` son configuracion, no datos de
+   * la carrera: leerlas con el `tx` sostenia locks durante dos viajes a la base que no
+   * hacian falta. Las sirve `CatalogoService` desde su cache. Ver
+   * 02-reservas-concurrencia.md y catalogo.service.ts.
+   */
+  it('no lee configuracion ni catalogo de estados dentro de la transaccion', async () => {
+    const { prisma, tx } = crearPrisma();
+
+    await crearServicio(prisma).servicio.reservar(dtoBase, CLIENTE);
+
+    expect(tx.configuracionNegocio.findUnique).not.toHaveBeenCalled();
+    expect(tx.estadoCita.findUnique).not.toHaveBeenCalled();
   });
 
   it('recalcula los importes desde la base: los adicionales suman costo y no duracion', async () => {
@@ -441,14 +469,14 @@ describe('CitasService.cancelar', () => {
 
     // Una cita Confirmada ya no la cancela el cliente...
     await expect(
-      new CitasService(cliente.prisma).cancelar('cita-1', {}, CLIENTE),
+      crearServicio(cliente.prisma).servicio.cancelar('cita-1', {}, CLIENTE),
     ).rejects.toBeInstanceOf(ConflictException);
 
     // ...pero el personal si, que es justo lo que el sistema anterior no cubria.
     const admin = crearPrisma();
     admin.tx.cita.findUnique.mockResolvedValue(citaConfirmada);
     await expect(
-      new CitasService(admin.prisma).cancelar('cita-1', {}, ADMIN),
+      crearServicio(admin.prisma).servicio.cancelar('cita-1', {}, ADMIN),
     ).resolves.toBeDefined();
   });
 });
@@ -456,11 +484,11 @@ describe('CitasService.cancelar', () => {
 describe('CitasService.findAll', () => {
   it('acota la lista al dueño segun el rol', async () => {
     const admin = crearPrisma();
-    await new CitasService(admin.prisma).findAll(ADMIN);
+    await crearServicio(admin.prisma).servicio.findAll(ADMIN);
     expect(admin.tx.cita.findMany.mock.calls[0][0].where).toEqual({});
 
     const cliente = crearPrisma();
-    await new CitasService(cliente.prisma).findAll(CLIENTE);
+    await crearServicio(cliente.prisma).servicio.findAll(CLIENTE);
     expect(cliente.tx.cita.findMany.mock.calls[0][0].where).toEqual({
       clienteId: 'usr-cli',
     });
@@ -490,6 +518,38 @@ describe('CitasService.reservar · outbox', () => {
 
     // El mismo cliente transaccional: si aqui llegara `prisma`, el INSERT del outbox
     // quedaria fuera de la transaccion y una reserva revertida dejaria un aviso vivo.
-    expect(outbox.encolarConfirmacion).toHaveBeenCalledWith(tx, 'cita-1');
+    const [clienteTx, aviso] = outbox.encolarConfirmacion.mock.calls[0];
+    expect(clienteTx).toBe(tx);
+    expect(aviso.id).toBe('cita-1');
+  });
+
+  /**
+   * El aviso viaja armado, no como un id: releer la cita desde el outbox eran cuatro
+   * consultas mas con la transaccion abierta. `aceptaWhatsapp` es el unico dato que no
+   * vuelve del INSERT, y sale de la consulta que `resolverCliente` ya hacia.
+   */
+  it('le pasa al outbox los datos del aviso, sin releer la cita', async () => {
+    const { prisma, tx } = crearPrisma();
+    tx.usuario.findUnique.mockResolvedValue({
+      id: 'usr-cli',
+      activo: true,
+      nombre: 'Marta',
+      telefono: '88880001',
+      aceptaWhatsapp: true,
+    });
+    const { servicio, outbox } = crearServicio(prisma);
+
+    await servicio.reservar(dtoBase, CLIENTE);
+
+    const [, aviso] = outbox.encolarConfirmacion.mock.calls[0];
+    expect(aviso.cliente).toMatchObject({
+      nombre: 'Marta',
+      telefono: '88880001',
+      aceptaWhatsapp: true,
+    });
+    expect(aviso.servicio.nombre).toBe(SERVICIO.nombre);
+    expect(aviso.empleado.usuario.nombre).toBe('Ana');
+    // La cita no se vuelve a leer: el INSERT ya la devolvio con su `include`.
+    expect(tx.cita.findUnique).not.toHaveBeenCalled();
   });
 });

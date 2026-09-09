@@ -4,8 +4,25 @@ import {
   Prisma,
   TipoNotificacion,
 } from '../generated/prisma/client.js';
+import { CatalogoService } from '../catalogo/catalogo.service.js';
 import { aE164 } from '../common/telefono.js';
 import { ConfirmacionService } from './confirmacion.service.js';
+
+/**
+ * Lo que el outbox necesita saber de una cita recien creada.
+ *
+ * Lo arma el llamador con datos que ya tiene en la mano. Releerlos aqui con un
+ * `findUnique` mas sus relaciones costaba cuatro consultas adicionales **dentro** de la
+ * transaccion de la reserva, para recuperar exactamente lo que el `include` del INSERT
+ * acababa de devolver.
+ */
+export interface DatosAviso {
+  id: string;
+  inicio: Date;
+  cliente: { nombre: string; telefono: string; aceptaWhatsapp: boolean };
+  servicio: { nombre: string };
+  empleado: { usuario: { nombre: string; apellido: string | null } };
+}
 
 /**
  * Encolar la intencion de enviar. Es lo unico del envio que participa de la
@@ -24,6 +41,7 @@ export class OutboxService {
   constructor(
     private readonly config: ConfigService,
     private readonly confirmacion: ConfirmacionService,
+    private readonly catalogo: CatalogoService,
   ) {}
 
   /**
@@ -34,27 +52,9 @@ export class OutboxService {
    */
   async encolarConfirmacion(
     tx: Prisma.TransactionClient,
-    citaId: string,
+    cita: DatosAviso,
   ): Promise<boolean> {
-    const cita = await tx.cita.findUnique({
-      where: { id: citaId },
-      include: {
-        cliente: {
-          select: {
-            nombre: true,
-            telefono: true,
-            aceptaWhatsapp: true,
-          },
-        },
-        servicio: { select: { nombre: true } },
-        empleado: {
-          select: { usuario: { select: { nombre: true, apellido: true } } },
-        },
-      },
-    });
-    if (!cita) {
-      return false;
-    }
+    const citaId = cita.id;
 
     // Sin opt-in explicito no sale un solo mensaje: es politica de WhatsApp, y es lo
     // que sostiene la reputacion del numero.
@@ -62,15 +62,9 @@ export class OutboxService {
       return false;
     }
 
-    const negocio = await tx.configuracionNegocio.findUnique({
-      where: { id: 1 },
-      select: {
-        nombre: true,
-        prefijoPais: true,
-        zonaHoraria: true,
-        locale: true,
-      },
-    });
+    // Cacheada: es la fila de configuracion, y esta llamada ocurre dentro de la
+    // transaccion de la reserva. Ver catalogo.service.ts.
+    const negocio = await this.catalogo.negocio();
 
     // El destino se congela en E.164 aqui y no se vuelve a leer del Usuario al enviar:
     // si el cliente cambia de numero, el mensaje ya encolado no debe salir a un destino

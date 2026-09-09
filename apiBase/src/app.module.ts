@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
+import { CatalogoModule } from './catalogo/catalogo.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { PropiedadCitaGuard } from './common/guards/propiedad-cita.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
@@ -25,6 +26,7 @@ import { WahaModule } from './integrations/waha/waha.module.js';
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    CatalogoModule,
     AuthModule,
     SyncModule,
     CitasModule,

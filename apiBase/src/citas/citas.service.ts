@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CatalogoService } from '../catalogo/catalogo.service.js';
 import { Role } from '../common/enums/role.enum.js';
 import {
   instanteDesdeZona,
@@ -30,8 +31,6 @@ const CODIGO_ESTADO_CANCELADA = 'CANCELADA';
 /** Granularidad con la que se ofrecen horarios libres en /citas/disponibilidad. */
 const PASO_MINUTOS = 15;
 
-const ZONA_POR_DEFECTO = 'UTC';
-
 /**
  * El 409 es el unico error que el usuario final lee tal cual, asi que se redacta
  * para el. Ver 04-contrato-api.md.
@@ -48,6 +47,20 @@ const USUARIO_PUBLICO = {
   telefono: true,
   email: true,
 } satisfies Prisma.UsuarioSelect;
+
+/**
+ * Lo que hace falta del cliente para encolar el aviso. `aceptaWhatsapp` no esta en
+ * `USUARIO_PUBLICO` y no debe estarlo: eso es la proyeccion que sale al cliente HTTP.
+ * Se lee aqui, en la consulta que `resolverCliente` ya hacia de todos modos.
+ */
+const CLIENTE_AVISO = {
+  id: true,
+  nombre: true,
+  telefono: true,
+  aceptaWhatsapp: true,
+} satisfies Prisma.UsuarioSelect;
+
+type ClienteAviso = Prisma.UsuarioGetPayload<{ select: typeof CLIENTE_AVISO }>;
 
 const INCLUIR_CITA = {
   cliente: { select: USUARIO_PUBLICO },
@@ -87,6 +100,7 @@ export class CitasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
+    private readonly catalogo: CatalogoService,
   ) {}
 
   /**
@@ -138,9 +152,9 @@ export class CitasService {
           fin,
         });
 
-        const clienteId = await this.resolverCliente(tx, dto, user);
+        const cliente = await this.resolverCliente(tx, dto, user);
         const adicionales = await this.cargarAdicionales(tx, dto.adicionalIds);
-        const estado = await this.estadoDeCatalogo(tx, CODIGO_ESTADO_INICIAL);
+        const estado = await this.estadoDeCatalogo(CODIGO_ESTADO_INICIAL);
 
         // Importes recalculados desde la base; el cuerpo nunca los aporta. Ver 02-reservas-concurrencia.md.
         const precioServicio = servicio.precio;
@@ -151,10 +165,10 @@ export class CitasService {
 
         const creada = await tx.cita.create({
           data: {
-            clienteId,
+            clienteId: cliente.id,
             // Quien digito. Con sesion es siempre el del token, mande lo que mande el
             // cuerpo; sin ella, el invitado se registra a si mismo.
-            registradaPorId: user?.userId ?? clienteId,
+            registradaPorId: user?.userId ?? cliente.id,
             empleadoId: empleado.id,
             servicioId: servicio.id,
             estadoId: estado.id,
@@ -178,7 +192,17 @@ export class CitasService {
         // Lo unico que este servicio sabe de las notificaciones: deja la intencion de
         // enviar dentro de la transaccion que ya tenia. El envio ocurre despues, en
         // otro proceso, y puede reintentar. Ver 09-conexion-whatsapp.md.
-        await this.outbox.encolarConfirmacion(tx, creada.id);
+        //
+        // Se le pasan los datos, no el id: todo lo que el aviso necesita acaba de
+        // volver del INSERT o de `resolverCliente`, y releerlo eran cuatro consultas
+        // mas con la transaccion abierta.
+        await this.outbox.encolarConfirmacion(tx, {
+          id: creada.id,
+          inicio: creada.inicio,
+          cliente,
+          servicio: creada.servicio,
+          empleado: creada.empleado,
+        });
 
         return creada;
       });
@@ -220,7 +244,7 @@ export class CitasService {
         }
 
         const estadoDestino = dto.estadoCodigo
-          ? await this.estadoSolicitado(tx, dto.estadoCodigo)
+          ? await this.estadoSolicitado(dto.estadoCodigo)
           : cita.estado;
 
         const inicio = dto.inicio ? new Date(dto.inicio) : cita.inicio;
@@ -320,10 +344,7 @@ export class CitasService {
         );
       }
 
-      const cancelada = await this.estadoDeCatalogo(
-        tx,
-        CODIGO_ESTADO_CANCELADA,
-      );
+      const cancelada = await this.estadoDeCatalogo(CODIGO_ESTADO_CANCELADA);
 
       return await tx.cita.update({
         where: { id },
@@ -343,7 +364,7 @@ export class CitasService {
    * porque entre esta consulta y la confirmacion alguien mas puede tomar el espacio.
    */
   async disponibilidad(query: ConsultarDisponibilidadDto) {
-    const zona = await this.zonaHoraria(this.prisma);
+    const zona = await this.catalogo.zonaHoraria();
     const [anio, mes, dia] = query.fecha.slice(0, 10).split('-').map(Number);
 
     const [servicio, empleado] = await Promise.all([
@@ -454,10 +475,7 @@ export class CitasService {
       );
     }
 
-    const confirmada = await this.estadoDeCatalogo(
-      tx,
-      CODIGO_ESTADO_CONFIRMADA,
-    );
+    const confirmada = await this.estadoDeCatalogo(CODIGO_ESTADO_CONFIRMADA);
 
     await tx.cita.update({
       where: { id: citaId },
@@ -510,7 +528,7 @@ export class CitasService {
     tx: Prisma.TransactionClient,
     { servicio, empleado, inicio, fin, excluirCitaId }: ContextoDisponibilidad,
   ): Promise<void> {
-    const zona = await this.zonaHoraria(tx);
+    const zona = await this.catalogo.zonaHoraria();
     const { diaSemana, minutos: minutoInicio } = partesEnZona(inicio, zona);
 
     // 1 · el dia tiene al menos una franja activa.
@@ -660,19 +678,19 @@ export class CitasService {
     tx: Prisma.TransactionClient,
     dto: ReservarCitaDto,
     user?: AuthenticatedUser,
-  ): Promise<string> {
+  ): Promise<ClienteAviso> {
     if (user) {
       const esPersonal =
         user.rol === Role.ADMIN || user.rol === Role.EMPLEADO;
       const id = esPersonal && dto.clienteId ? dto.clienteId : user.userId;
       const cliente = await tx.usuario.findUnique({
         where: { id },
-        select: { id: true, activo: true },
+        select: { ...CLIENTE_AVISO, activo: true },
       });
       if (!cliente || !cliente.activo) {
         throw new NotFoundException(MENSAJE_NO_ENCONTRADO);
       }
-      return cliente.id;
+      return cliente;
     }
 
     if (!dto.cliente) {
@@ -684,7 +702,7 @@ export class CitasService {
     const telefono = normalizarTelefono(dto.cliente.telefono);
     const existente = await tx.usuario.findUnique({
       where: { telefono },
-      select: { id: true, activo: true },
+      select: { ...CLIENTE_AVISO, activo: true },
     });
     if (existente) {
       if (!existente.activo) {
@@ -692,7 +710,7 @@ export class CitasService {
           'Ese telefono no puede reservar; comuniquese con el negocio.',
         );
       }
-      return existente.id;
+      return existente;
     }
 
     // Ficha sin contrasena: existe para colgar la cita de un telefono, no para
@@ -709,9 +727,9 @@ export class CitasService {
         aceptaWhatsapp: dto.aceptaWhatsapp === true,
         aceptaWhatsappEn: dto.aceptaWhatsapp === true ? new Date() : null,
       },
-      select: { id: true },
+      select: CLIENTE_AVISO,
     });
-    return creado.id;
+    return creado;
   }
 
   /**
@@ -773,8 +791,8 @@ export class CitasService {
   }
 
   /** Estado que pide el cliente: si no existe, el cuerpo es invalido. */
-  private async estadoSolicitado(tx: Prisma.TransactionClient, codigo: string) {
-    const estado = await tx.estadoCita.findUnique({ where: { codigo } });
+  private async estadoSolicitado(codigo: string) {
+    const estado = await this.catalogo.estado(codigo);
     if (!estado) {
       throw new BadRequestException('El estado indicado no existe.');
     }
@@ -782,24 +800,14 @@ export class CitasService {
   }
 
   /** Estado que el sistema da por sentado: si falta, la semilla no corrio. */
-  private async estadoDeCatalogo(tx: Prisma.TransactionClient, codigo: string) {
-    const estado = await tx.estadoCita.findUnique({ where: { codigo } });
+  private async estadoDeCatalogo(codigo: string) {
+    const estado = await this.catalogo.estado(codigo);
     if (!estado) {
       throw new InternalServerErrorException(
         `Falta el estado "${codigo}" en el catalogo de EstadoCita.`,
       );
     }
     return estado;
-  }
-
-  private async zonaHoraria(
-    cliente: Prisma.TransactionClient | PrismaService,
-  ): Promise<string> {
-    const config = await cliente.configuracionNegocio.findUnique({
-      where: { id: 1 },
-      select: { zonaHoraria: true },
-    });
-    return config?.zonaHoraria ?? ZONA_POR_DEFECTO;
   }
 
   /**

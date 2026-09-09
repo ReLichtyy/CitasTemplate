@@ -12,7 +12,10 @@ import { PrismaClient } from '../generated/prisma/client.js';
  * base equivocada es peor que no arrancar.
  */
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   constructor(config: ConfigService) {
     const url = config.get<string>('DATABASE_URL');
     if (!url) {
