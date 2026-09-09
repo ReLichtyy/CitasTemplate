@@ -1,6 +1,7 @@
 # Variables de entorno - credenciales y claves de API
 .env
 .env.local
+.env.example
 .env.*.local
 .env.development
 .env.production
