@@ -101,8 +101,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new ApiError(mensajeDeError(cuerpo, response), response.status);
   }
 
-  // El sobre de 04-contrato-api.md todavia no lo arma el API. Cuando lo haga, esto lo desenvuelve
-  // solo y las paginas no cambian.
+  // El API envuelve toda respuesta en `{ success, data, message }` (`SobreInterceptor`,
+  // global desde main.ts). Se desenvuelve aqui y las paginas ven solo `data`. El caso sin
+  // sobre queda por si alguna respuesta se sirve fuera del interceptor. Ver 04-contrato-api.md.
   return (esSobre(cuerpo) ? cuerpo.data : cuerpo) as T;
 }
 

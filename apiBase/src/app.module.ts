@@ -2,8 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CatalogoModule } from './catalogo/catalogo.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
@@ -38,9 +36,8 @@ import { WahaModule } from './integrations/waha/waha.module.js';
     NotificacionesModule,
     WahaModule,
   ],
-  controllers: [AppController, HealthController],
+  controllers: [HealthController],
   providers: [
-    AppService,
     // Every route requires a valid JWT and passes role checks by default.
     // Opt out with @Public(), scope with @Roles(...), and declare ownership with
     // @PropiedadCita() — rol y propiedad son cosas distintas. Ver 03-autorizacion.md.

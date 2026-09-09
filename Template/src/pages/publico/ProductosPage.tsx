@@ -3,6 +3,7 @@ import { Card } from '../../components/ui/Card';
 import { Eyebrow } from '../../components/ui/Eyebrow';
 import { ProductoCard } from '../../components/ui/ProductoCard';
 import { ProductoModal } from '../../components/ui/ProductoModal';
+import { SeccionHeader } from '../../components/ui/SeccionHeader';
 import { configuracionPlaceholder } from '../../lib/configuracionPlaceholder';
 import {
   categoriasPlaceholder,
@@ -13,27 +14,6 @@ import {
 // La misma rejilla que los otros dos catalogos: tres rejillas distintas en un mismo sitio se
 // leen como tres maquetaciones distintas.
 const GRID_CLASSES = 'stagger-in grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3';
-
-function SeccionHeader({
-  eyebrow,
-  titulo,
-  bajada,
-}: {
-  eyebrow: string;
-  titulo: string;
-  bajada?: string;
-}) {
-  return (
-    <header className="flex flex-col items-center gap-3 text-center">
-      <Eyebrow tono="acento">{eyebrow}</Eyebrow>
-      <h2 className="font-heading text-2xl font-normal tracking-tight text-text-h sm:text-3xl">
-        {titulo}
-      </h2>
-      <span className="h-px w-12 bg-accent/60" aria-hidden="true" />
-      {bajada && <p className="max-w-prose text-sm text-text">{bajada}</p>}
-    </header>
-  );
-}
 
 // Orden de encabezados: un solo h1 (el nombre del catalogo), un h2 por seccion y los cuatro
 // tipos como h3 dentro de la primera. Saltar de h1 a h3 rompe la navegacion por encabezados
@@ -73,7 +53,8 @@ export function ProductosPage() {
         <SeccionHeader
           eyebrow="Que ofrecemos"
           titulo="Cuatro cuidados, cuatro trabajos distintos"
-          bajada="Cada tipo resuelve una cosa. Sirven solos, y ordenados en ese mismo orden funcionan mejor."
+          descripcion="Cada tipo resuelve una cosa. Sirven solos, y ordenados en ese mismo orden funcionan mejor."
+          divisor
         />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -108,7 +89,8 @@ export function ProductosPage() {
             <SeccionHeader
               eyebrow={`Tipo ${`${categoriasPlaceholder.indexOf(categoria) + 1}`.padStart(2, '0')}`}
               titulo={categoria.nombre}
-              bajada={categoria.promesa}
+              descripcion={categoria.promesa}
+              divisor
             />
             <div className={GRID_CLASSES}>
               {productos.map((producto) => (

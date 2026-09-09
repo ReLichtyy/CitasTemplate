@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { TipoNotificacion } from '../generated/prisma/client.js';
 import { WhatsappGateway, type ResultadoEnvio } from './whatsapp.gateway.js';
-import { adjuntoDe, renderizar } from './plantillas.js';
+import { renderizar } from './plantillas.js';
 
 /**
  * Implementacion de mentira: escribe el mensaje al log en vez de mandarlo.

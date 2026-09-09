@@ -5,6 +5,12 @@ type SeccionHeaderProps = {
   eyebrow?: string;
   titulo: string;
   descripcion?: string;
+  /**
+   * Filete corto bajo el titulo. Lo pide el catalogo de productos, donde las secciones
+   * van seguidas y sin el se leen como una sola. Las paginas que ya se separan con
+   * espacio no lo necesitan.
+   */
+  divisor?: boolean;
   className?: string;
 };
 
@@ -20,13 +26,17 @@ export function SeccionHeader({
   eyebrow,
   titulo,
   descripcion,
+  divisor = false,
   className = '',
 }: SeccionHeaderProps) {
   return (
-    <div className={`mx-auto flex max-w-2xl flex-col items-center gap-3 text-center ${className}`}>
+    <header
+      className={`mx-auto flex max-w-2xl flex-col items-center gap-3 text-center ${className}`}
+    >
       {eyebrow && <Eyebrow tono="acento">{eyebrow}</Eyebrow>}
       <h2 className="text-2xl text-balance sm:text-3xl">{titulo}</h2>
+      {divisor && <span className="h-px w-12 bg-accent/60" aria-hidden="true" />}
       {descripcion && <p className="text-sm text-pretty text-text-muted">{descripcion}</p>}
-    </div>
+    </header>
   );
 }

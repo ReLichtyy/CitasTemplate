@@ -19,16 +19,17 @@ Each directory is built, linted, and tested independently — always `cd` into t
 cd apiBase
 npm run start:dev      # watch mode, http://localhost:3000
 npm run build           # nest build (tsc)
-npm run lint            # oxlint src/ test/
+npm run lint            # oxlint src/
 npm run test             # vitest run (unit)
 npm run test:watch
-npm run test:e2e         # vitest run --config ./vitest.config.e2e.ts
 npm run test:cov
 ```
 
 Run a single test file: `npx vitest run src/path/to/file.spec.ts`.
 
-Backend integration tests (`test:e2e`) are CI-only — not expected to run locally.
+There is no e2e/integration suite: the harness and its one scaffolded spec were removed
+once it became clear the spec only asserted the deleted `GET /` placeholder. Bring back
+`vitest.config.e2e.ts` together with the first real integration test, not before.
 
 ### Template (React + Vite)
 
@@ -97,7 +98,7 @@ No test runner is configured yet in Template.
 - **`src/routes/ProtectedRoute.tsx`** redirects to `/auth/login` when not authenticated; **`src/routes/RoleRoute.tsx`** takes an `allow: Role[]` prop and redirects to `/sistema/no-autorizado` otherwise. Both are `react-router` layout routes (`<Route element={...}><Route .../></Route>`) — nest new gated routes under them in `App.tsx` rather than checking auth inside a page component.
 - **`src/context/AuthContext.tsx`** (`useAuth()`) holds `token`/`role`, backed by `localStorage` via `src/api/client.ts`'s `tokenStorage`. `login(token, role)`/`logout()` are the only mutators — call these from the login page once `POST /auth/login` returns a real token, don't write to `localStorage` directly elsewhere.
 - **`src/api/client.ts`** is the single fetch wrapper for calling apiBase — reads `import.meta.env.VITE_API_URL` (defaults to `http://localhost:3000`) and auto-attaches the stored bearer token to every request. Exposes `get/post/patch/delete`.
-- **`src/services/`** has one thin file per backend resource (`citasService`, `empleadosService`, `serviciosService`, `horariosService`, `restriccionesService`, `adicionalesService`, `authService`), each just mapping methods 1:1 to `apiClient` calls for that resource's routes. Add new backend calls as a method here, in the matching resource file — don't call `apiClient`/`fetch` directly from a page/component.
+- **`src/services/`** has one thin file per backend resource that actually answers (`citasService`, `empleadosService`, `serviciosService`, `authService`), each just mapping methods 1:1 to `apiClient` calls for that resource's routes. There is deliberately no `horariosService`/`restriccionesService`/`adicionalesService`: those backend services are still stubs, so a frontend file for them would only be an unused wrapper over routes that throw. Add each one back together with the page that consumes it. Add new backend calls as a method here, in the matching resource file — don't call `apiClient`/`fetch` directly from a page/component.
 - Env vars are documented in `Template/.env.example`.
 
 ### Cross-cutting

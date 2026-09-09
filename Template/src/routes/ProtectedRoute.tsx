@@ -13,9 +13,8 @@ type ProtectedRouteProps = {
 export function ProtectedRoute({ redirigirA = '/auth/login' }: ProtectedRouteProps) {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
-  // `from` todavia no tiene consumidor: LoginPage sigue siendo un placeholder. Es
-  // deliberado, no un descuido — 06-hero-landing.md exige que el login devuelva al destino, y ese
-  // dato tiene que estar guardado cuando se implemente (03-autorizacion.md). No borrar.
+  // `from` lo lee `LoginPage` para volver al destino que el visitante queria abrir, que es
+  // el punto de exigir sesion en vez de mandarlo siempre al inicio (06-hero-landing.md).
   return isAuthenticated ? (
     <Outlet />
   ) : (
