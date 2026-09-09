@@ -1,3 +1,88 @@
-# Variables que consume docker-compose.yml. Lleva la clave del API de WAHA y las
-# credenciales del panel: nunca se commitea. La plantilla es .env.example.
+# Variables de entorno - credenciales y claves de API
 .env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+
+# Docker - configuraciones y volúmenes
+docker-compose.override.yml
+docker-compose.prod.yml
+docker-compose.dev.yml
+.docker/
+
+# WAHA (WhatsApp API) - sesiones y configuraciones
+waha-sessions/
+*.sessions/
+.waha/
+
+# Base de datos - volúmenes y dumps
+*.sql
+*.sql.gz
+*.db
+*.sqlite
+*.sqlite3
+citas-db-data/
+
+# Logs y archivos temporales
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Directorios de construcción y dependencias
+node_modules/
+dist/
+dist-ssr/
+build/
+.next/
+out/
+.cache/
+
+# Archivos de IDE y editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Archivos de sistema y temporales
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Certificados y claves
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# Archivos de configuración sensibles
+config.local.js
+config.local.ts
+*.secret
+*.private
+
+# Testing y coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# CI/CD - archivos de configuración sensibles
+.github/workflows/*-secrets.yml
+.gitlab-ci.local.yml
+
+# Documentación temporal
+TODO.md
+NOTES.md
+TEMP.md
