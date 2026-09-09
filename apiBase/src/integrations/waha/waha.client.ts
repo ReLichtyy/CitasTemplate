@@ -1,10 +1,15 @@
+import { readFile } from 'node:fs/promises';
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import type { TipoNotificacion } from '../../generated/prisma/client.js';
-import { renderizar } from '../../notificaciones/plantillas.js';
+import {
+  adjuntoDe,
+  renderizar,
+  type Adjunto,
+} from '../../notificaciones/plantillas.js';
 import {
   CanalNoDisponibleError,
   EnvioPermanenteError,
@@ -35,6 +40,12 @@ const CACHE_ESTADO_MS = 15_000;
 export class WahaClient extends WhatsappGateway {
   private readonly logger = new Logger(WahaClient.name);
   private estadoVerificadoEn = 0;
+  /**
+   * El adjunto en base64, cacheado por ruta. Es un archivo del propio despliegue que no
+   * cambia mientras el proceso viva: releerlo y recodificarlo en cada aviso es trabajo
+   * repetido dentro del camino que se acaba de optimizar.
+   */
+  private readonly adjuntosEnBase64 = new Map<string, string>();
 
   constructor(
     private readonly http: HttpService,
@@ -61,25 +72,45 @@ export class WahaClient extends WhatsappGateway {
 
     await this.exigirSesionOperativa(url, apiKey, sesion);
 
+    const texto = renderizar(plantilla, variables);
+    const adjunto = adjuntoDe(plantilla);
+    const cuerpo = adjunto
+      ? {
+          session: sesion,
+          chatId: aChatId(destino),
+          // WhatsApp llama "caption" al texto que acompaña a una imagen. Va en la
+          // **misma** peticion: mandar imagen y texto por separado son dos mensajes en
+          // el chat, dos latencias y dos filas que conciliar.
+          caption: texto,
+          file: {
+            mimetype: adjunto.mimetype,
+            filename: adjunto.nombre,
+            data: await this.enBase64(adjunto),
+          },
+        }
+      : { session: sesion, chatId: aChatId(destino), text: texto };
+
+    const ruta = adjunto ? 'sendImage' : 'sendText';
+
     let respuesta;
     try {
       respuesta = await firstValueFrom(
-        this.http.post<RespuestaEnvioWaha>(
-          `${url}/api/sendText`,
-          {
-            session: sesion,
-            chatId: aChatId(destino),
-            text: renderizar(plantilla, variables),
-          },
-          {
-            headers: { 'X-Api-Key': apiKey },
-            timeout: this.config.get<number>('waha.timeoutMs'),
-          },
-        ),
+        this.http.post<RespuestaEnvioWaha>(`${url}/api/${ruta}`, cuerpo, {
+          headers: { 'X-Api-Key': apiKey },
+          timeout: this.config.get<number>('waha.timeoutMs'),
+        }),
       );
     } catch (error) {
       throw this.traducir(error);
     }
+
+    /**
+     * Un envio aceptado prueba que la sesion esta viva mejor que cualquier consulta, y
+     * revalida la ventana. Sin esto la cache no servia de nada en el caso real —avisos
+     * espaciados minutos—: siempre estaba vencida y cada mensaje pagaba una consulta
+     * extra de ~200 ms antes de salir.
+     */
+    this.estadoVerificadoEn = Date.now();
 
     // `key` es donde lo deja NOWEB; `id`, donde lo dejaba WEBJS. Ver waha.types.ts.
     const idExterno = idDeMensaje(respuesta.data?.id ?? respuesta.data?.key);
@@ -89,6 +120,32 @@ export class WahaClient extends WhatsappGateway {
       this.logger.warn('WAHA acepto el mensaje sin devolver id.');
     }
     return { idExterno };
+  }
+
+  /**
+   * Lee el adjunto una vez y lo deja cacheado en base64.
+   *
+   * Un fallo aqui es del despliegue —el asset no llego a `dist/`—, no del mensaje ni
+   * del canal, y es `CanalNoDisponibleError` a proposito: no se gasta el presupuesto de
+   * reintentos de los avisos por un archivo que falta, y en cuanto se corrige el
+   * despliegue la cola sale sola.
+   */
+  private async enBase64(adjunto: Adjunto): Promise<string> {
+    const clave = adjunto.ruta.href;
+    const cacheado = this.adjuntosEnBase64.get(clave);
+    if (cacheado) {
+      return cacheado;
+    }
+
+    try {
+      const datos = (await readFile(adjunto.ruta)).toString('base64');
+      this.adjuntosEnBase64.set(clave, datos);
+      return datos;
+    } catch (error) {
+      throw new CanalNoDisponibleError(
+        `No se pudo leer el adjunto ${adjunto.nombre} (${clave}): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /**

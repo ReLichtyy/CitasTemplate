@@ -169,7 +169,11 @@ function crearPrisma() {
  * hagan de verdad es asunto de 09-conexion-whatsapp.md.
  */
 function crearServicio(prisma: PrismaService) {
-  const outbox = { encolarConfirmacion: vi.fn().mockResolvedValue(true) };
+  const outbox = {
+    encolarConfirmacion: vi.fn().mockResolvedValue(true),
+    // Se llama despues del commit para que el aviso no espere al sondeo del worker.
+    despertarAlWorker: vi.fn(),
+  };
   // La zona y el catalogo de estados ya no se leen dentro de la transaccion: los sirve
   // `CatalogoService`, que cachea las dos tablas de configuracion.
   const catalogo = {

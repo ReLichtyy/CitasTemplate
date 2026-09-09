@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import {
   EstadoNotificacion,
   type NotificacionSalida,
@@ -13,6 +13,9 @@ import {
   EnvioPermanenteError,
   WhatsappGateway,
 } from './whatsapp.gateway.js';
+
+/** Nombre del sondeo en el registro de tareas. */
+const NOMBRE_SONDEO = 'notificaciones-outbox';
 
 /** Una fila ENVIANDO mas vieja que esto es un proceso que murio a mitad de envio. */
 const MINUTOS_RECLAMO_VENCIDO = 10;
@@ -42,18 +45,67 @@ const HORAS_MAX_CANAL_CAIDO = 24;
  * despliegue esta fijado en 11.4.
  */
 @Injectable()
-export class NotificacionesWorker {
+export class NotificacionesWorker implements OnModuleInit {
   private readonly logger = new Logger(NotificacionesWorker.name);
-  /** Una pasada a la vez por proceso: el cron no espera a la anterior. */
+  /** Una pasada a la vez por proceso: el sondeo no espera a la anterior. */
   private corriendo = false;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly gateway: WhatsappGateway,
+    private readonly agenda: SchedulerRegistry,
   ) {}
 
-  @Cron(CronExpression.EVERY_MINUTE, { name: 'notificaciones-outbox' })
+  /**
+   * El sondeo se registra a mano y no con `@Cron` porque el periodo sale de la
+   * configuracion, y un decorador se evalua al cargar la clase, cuando todavia no hay
+   * `ConfigService`. Un cron de un minuto tampoco podria bajar de ahi: es la unidad
+   * mas pequeña que entiende la expresion.
+   *
+   * Solo se registra en el proceso que hace de worker. En los demas, este intervalo
+   * seria una consulta cada pocos segundos para no reclamar nunca nada.
+   */
+  onModuleInit(): void {
+    if (!this.config.get<boolean>('notificaciones.worker')) {
+      return;
+    }
+
+    const cada = this.config.get<number>('notificaciones.intervaloMs') ?? 5000;
+
+    // `addInterval` lanza si el nombre ya existe. Un segundo registro solo ocurre si
+    // el modulo se reinicializa sin morir el proceso —recarga en caliente, o una
+    // prueba que arranca el modulo dos veces—, y ahi conviene reemplazar el anterior
+    // antes que tumbar el arranque.
+    if (this.agenda.doesExist('interval', NOMBRE_SONDEO)) {
+      this.agenda.deleteInterval(NOMBRE_SONDEO);
+    }
+
+    this.agenda.addInterval(
+      NOMBRE_SONDEO,
+      setInterval(() => void this.drenar(), cada),
+    );
+    this.logger.log(`Outbox: sondeo cada ${cada} ms.`);
+  }
+
+  /**
+   * Drena ahora mismo, sin esperar al sondeo.
+   *
+   * Se llama **despues** de que la transaccion de la cita confirme: llamarlo dentro
+   * dejaria al worker leyendo una fila que todavia no existe para nadie mas, no
+   * encontraria nada, y el aviso volveria a esperar al siguiente tic.
+   *
+   * No se espera al resultado a proposito: quien reserva no puede quedarse colgado de
+   * una llamada a WhatsApp. Si esta pasada falla, la fila sigue PENDIENTE y el sondeo
+   * la recoge.
+   */
+  despertar(): void {
+    if (!this.config.get<boolean>('notificaciones.worker') || this.corriendo) {
+      return;
+    }
+    setImmediate(() => void this.drenar());
+  }
+
   async drenar(): Promise<void> {
     if (!this.config.get<boolean>('notificaciones.worker') || this.corriendo) {
       return;

@@ -7,6 +7,7 @@ import {
   type WhatsappGateway,
 } from './whatsapp.gateway.js';
 import type { ConfigService } from '@nestjs/config';
+import type { SchedulerRegistry } from '@nestjs/schedule';
 
 const FILA = {
   id: 'not-1',
@@ -59,12 +60,17 @@ function crearWorker(
   const config = { get: (clave: string) => valores[clave] };
   const gateway = { enviar: vi.fn().mockResolvedValue({ idExterno: 'wa-1' }) };
 
+  // El registro del intervalo es cosa de `onModuleInit`, que estas pruebas no llaman:
+  // aqui se ejercita `drenar` directamente.
+  const agenda = { addInterval: vi.fn() };
+
   const worker = new NotificacionesWorker(
     prisma as unknown as PrismaService,
     config as unknown as ConfigService,
     gateway as unknown as WhatsappGateway,
+    agenda as unknown as SchedulerRegistry,
   );
-  return { worker, prisma, tx, gateway };
+  return { worker, prisma, tx, gateway, agenda };
 }
 
 describe('NotificacionesWorker', () => {

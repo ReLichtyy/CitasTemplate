@@ -3,7 +3,7 @@ import { Alert } from '../../components/ui/Alert';
 import { ButtonLink } from '../../components/ui/ButtonLink';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ServicioCard } from '../../components/ui/ServicioCard';
-import { Spinner } from '../../components/ui/Spinner';
+import { SkeletonMediaCardGrid } from '../../components/ui/Skeleton';
 import { Thumbnail } from '../../components/ui/Thumbnail';
 import { Modal } from '../../components/ui/Modal';
 import { useRecursoApi } from '../../hooks/useRecursoApi';
@@ -45,11 +45,7 @@ export function ServiciosPage() {
         </p>
       </header>
 
-      {cargando && (
-        <div className="flex justify-center py-8">
-          <Spinner />
-        </div>
-      )}
+      {cargando && <SkeletonMediaCardGrid className={GRID_CLASSES} aspecto="aspect-4/3" />}
       {!cargando && error && <Alert>{error}</Alert>}
       {!cargando && !error && servicios.length === 0 && (
         <EmptyState
@@ -75,11 +71,12 @@ export function ServiciosPage() {
       <Modal open={elegido !== null} onClose={() => setElegido(null)} titulo={elegido?.nombre ?? ''}>
         {elegido && (
           <div className="flex flex-col gap-4">
+            {/* En el detalle la foto va limpia: sin foco ni desaturacion, que son de la card. */}
             {elegido.imagenUrl && (
-              <img
+              <Thumbnail
                 src={elegido.imagenUrl}
-                alt=""
-                className="h-32 w-full rounded-lg bg-accent-bg object-cover sm:h-40"
+                fallback={elegido.nombre.charAt(0).toUpperCase()}
+                className="aspect-4/3 w-full rounded-lg text-5xl"
               />
             )}
             <div className="flex items-baseline justify-between gap-3">

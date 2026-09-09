@@ -5,7 +5,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { EspecialistaCard } from '../../components/ui/EspecialistaCard';
 import { Modal } from '../../components/ui/Modal';
 import { ServicioCard } from '../../components/ui/ServicioCard';
-import { Spinner } from '../../components/ui/Spinner';
+import { SkeletonMediaCardGrid } from '../../components/ui/Skeleton';
 import { StarIcon } from '../../components/ui/StarIcon';
 import { Thumbnail } from '../../components/ui/Thumbnail';
 import { useRecursoApi } from '../../hooks/useRecursoApi';
@@ -31,20 +31,19 @@ function EstadoSeccion({
   error,
   vacio,
   tituloVacio,
+  esqueleto,
   children,
 }: {
   cargando: boolean;
   error: string | null;
   vacio: boolean;
   tituloVacio: string;
+  /** El placeholder tiene la forma de la card de esa seccion: las dos no miden igual. */
+  esqueleto: ReactNode;
   children: ReactNode;
 }) {
   if (cargando) {
-    return (
-      <div className="flex justify-center py-8">
-        <Spinner />
-      </div>
-    );
+    return <>{esqueleto}</>;
   }
   if (error) {
     return <Alert>{error}</Alert>;
@@ -97,6 +96,9 @@ export function EquipoPage() {
           error={empleados.error}
           vacio={especialistas.length === 0}
           tituloVacio={`Todavia no hay ${terminoEmpleadoPlural.toLowerCase()} publicados.`}
+          esqueleto={
+            <SkeletonMediaCardGrid className={GRID_CLASSES} aspecto="aspect-square sm:aspect-4/5" />
+          }
         >
           <div className={GRID_CLASSES}>
             {especialistas.map((item) => (
@@ -118,6 +120,7 @@ export function EquipoPage() {
           error={servicios.error}
           vacio={catalogo.length === 0}
           tituloVacio={`Todavia no hay ${terminoServicioPlural.toLowerCase()} publicados.`}
+          esqueleto={<SkeletonMediaCardGrid className={GRID_CLASSES} aspecto="aspect-4/3" />}
         >
           <div className={GRID_CLASSES}>
             {catalogo.map((item) => (
@@ -140,16 +143,39 @@ export function EquipoPage() {
       >
         {especialista && (
           <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-4">
-              <Thumbnail
-                src={especialista.fotoUrl}
-                fallback={iniciales(especialista.nombre, especialista.apellido)}
-                className="h-16 w-16 rounded-full text-lg"
-              />
-              {especialista.especialidad && (
-                <p className="text-sm font-medium text-text-muted">{especialista.especialidad}</p>
-              )}
-            </div>
+            {/* Con foto, retrato ancho como el del servicio; sin ella, la fila compacta de
+                siempre — un banner de 224 px relleno con dos iniciales es mucho vacio. En
+                los dos casos pasa por Thumbnail, asi que una URL podrida cae a las
+                iniciales y no al icono de imagen rota. */}
+            {especialista.fotoUrl ? (
+              <div className="flex flex-col gap-3">
+                {/* En el detalle la foto va limpia: sin foco ni desaturacion, que son de la
+                    card. Aqui la imagen es el contenido, no el fondo de un titulo. */}
+                <Thumbnail
+                  src={especialista.fotoUrl}
+                  fallback={iniciales(especialista.nombre, especialista.apellido)}
+                  className="aspect-4/3 w-full rounded-lg text-5xl"
+                />
+                {especialista.especialidad && (
+                  <p className="text-sm font-medium text-text-muted">
+                    {especialista.especialidad}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <Thumbnail
+                  src={especialista.fotoUrl}
+                  fallback={iniciales(especialista.nombre, especialista.apellido)}
+                  className="h-16 w-16 rounded-full text-lg"
+                />
+                {especialista.especialidad && (
+                  <p className="text-sm font-medium text-text-muted">
+                    {especialista.especialidad}
+                  </p>
+                )}
+              </div>
+            )}
 
             {especialista.bio && <p className="text-sm leading-relaxed">{especialista.bio}</p>}
 
@@ -206,10 +232,10 @@ export function EquipoPage() {
         {servicio && (
           <div className="flex flex-col gap-4">
             {servicio.imagenUrl && (
-              <img
+              <Thumbnail
                 src={servicio.imagenUrl}
-                alt=""
-                className="h-32 w-full rounded-lg bg-accent-bg object-cover sm:h-40"
+                fallback={servicio.nombre.charAt(0).toUpperCase()}
+                className="aspect-4/3 w-full rounded-lg text-5xl"
               />
             )}
             <div className="flex items-baseline justify-between gap-3">

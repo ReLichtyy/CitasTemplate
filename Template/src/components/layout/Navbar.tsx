@@ -3,18 +3,23 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../ui/Button';
 import { ButtonLink } from '../ui/ButtonLink';
+import { MarcaNegocio } from '../ui/MarcaNegocio';
 
+// El borde inferior queda siempre presente (transparente en reposo) para que ganar el
+// acento en hover/activo no mueva el link un pixel hacia arriba.
 const linkClass = ({ isActive }: { isActive: boolean }) =>
-  `text-sm font-medium transition-colors ${isActive ? 'text-accent' : 'text-text hover:text-text-h'}`;
+  `border-b-2 pb-0.5 text-sm font-medium transition-colors ${isActive ? 'border-accent text-accent' : 'border-transparent text-text hover:border-accent-border hover:text-text-h'}`;
 
 const mobileLinkClass = ({ isActive }: { isActive: boolean }) =>
   `flex min-h-11 w-full items-center justify-center text-base font-medium transition-colors ${isActive ? 'text-accent' : 'text-text hover:text-text-h'}`;
 
-type Enlace = { to: string; label: string; end?: boolean };
+export type Enlace = { to: string; label: string; end?: boolean };
 
-const ENLACES_PUBLICOS: Enlace[] = [
+// Compartida con Footer: el pie repite la misma navegacion publica, no una propia.
+export const ENLACES_PUBLICOS: Enlace[] = [
   { to: '/', label: 'Inicio', end: true },
   { to: '/equipo', label: 'Equipo' },
+  { to: '/productos', label: 'Productos' },
   { to: '/citas/reservar', label: 'Reservar' },
 ];
 
@@ -65,8 +70,13 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-md">
       <nav className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
-        <NavLink to="/" className="text-lg font-semibold text-text-h no-underline">
-          CitasTemplate
+        {/* La marca sale de ConfiguracionNegocio: "CitasTemplate" es el nombre del
+            repositorio, no el del negocio. Ver 05-marca-y-responsive.md. */}
+        <NavLink to="/" className="no-underline transition-colors hover:text-accent">
+          <MarcaNegocio
+            imgClassName="max-h-8 w-auto"
+            textClassName="font-heading text-xl font-normal tracking-tight text-text-h transition-colors hover:text-accent"
+          />
         </NavLink>
 
         <div className="hidden flex-1 items-center justify-center gap-6 md:flex">
@@ -85,7 +95,7 @@ export function Navbar() {
           aria-expanded={menuOpen}
           aria-controls="navbar-mobile-menu"
           aria-label={menuOpen ? 'Cerrar menu' : 'Abrir menu'}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-md text-text-h transition-colors hover:bg-accent-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-border md:hidden"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-md text-text-h transition-[background-color,transform] duration-150 ease-out hover:bg-accent-bg active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-border focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:hidden"
         >
           <svg
             viewBox="0 0 24 24"

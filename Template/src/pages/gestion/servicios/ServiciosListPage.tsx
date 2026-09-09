@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { serviciosService } from '../../../services/serviciosService';
-import { Card } from '../../../components/ui/Card';
+import { Card, CARD_INTERACTIVE_CLASSES } from '../../../components/ui/Card';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import { PageHeader } from '../../../components/ui/PageHeader';
-import { Spinner } from '../../../components/ui/Spinner';
+import { Skeleton } from '../../../components/ui/Skeleton';
 
 // Placeholder shape until the backend contract for /servicios is defined.
 type ServicioListItem = { id: string; nombre: string };
@@ -23,7 +23,15 @@ export function ServiciosListPage() {
     <div>
       <PageHeader title="Servicios" />
 
-      {servicios === null && <Spinner label="Cargando servicios..." />}
+      {servicios === null && (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <Card key={i}>
+              <Skeleton className="h-5 w-1/3" />
+            </Card>
+          ))}
+        </div>
+      )}
 
       {servicios !== null && servicios.length === 0 && (
         <EmptyState title="Sin servicios" description="Todavia no hay servicios registrados." />
@@ -33,9 +41,9 @@ export function ServiciosListPage() {
         <div className="flex flex-col gap-3">
           {servicios.map((servicio) => (
             <Link key={servicio.id} to={`/gestion/servicios/${servicio.id}`} className="no-underline">
-              <Card className="transition-colors hover:border-accent-border">
+              <div className={CARD_INTERACTIVE_CLASSES}>
                 <p className="m-0 font-medium text-text-h">{servicio.nombre}</p>
-              </Card>
+              </div>
             </Link>
           ))}
         </div>

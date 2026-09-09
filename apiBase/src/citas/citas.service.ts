@@ -250,6 +250,18 @@ export class CitasService {
         return creada;
       });
 
+      /**
+       * La transaccion ya confirmo, asi que la fila del outbox existe para todos: se
+       * despierta al worker para que el aviso salga ahora y no en el siguiente sondeo.
+       * Medido antes de esto, la espera al tic era entre 13 y 46 segundos de los
+       * ~47 que tardaba el mensaje en llegar.
+       *
+       * Va aqui y no dentro de la transaccion por eso mismo: despertar antes del
+       * commit es despertar a un worker que no ve nada. No se espera al resultado
+       * —quien reserva no se queda colgado de WhatsApp—.
+       */
+      this.outbox.despertarAlWorker();
+
       // Un invitado se lleva su comprobante, no la ficha del titular del telefono.
       return user ? cita : this.comprobanteDeInvitado(cita);
     } catch (error) {

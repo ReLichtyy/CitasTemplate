@@ -7,6 +7,7 @@ import {
 import { CatalogoService } from '../catalogo/catalogo.service.js';
 import { aE164 } from '../common/telefono.js';
 import { ConfirmacionService } from './confirmacion.service.js';
+import { NotificacionesWorker } from './notificaciones.worker.js';
 
 /**
  * Lo que el outbox necesita saber de una cita recien creada.
@@ -42,7 +43,24 @@ export class OutboxService {
     private readonly config: ConfigService,
     private readonly confirmacion: ConfirmacionService,
     private readonly catalogo: CatalogoService,
+    private readonly worker: NotificacionesWorker,
   ) {}
+
+  /**
+   * Avisa al worker de que hay trabajo, para que no espere al sondeo.
+   *
+   * Se expone aqui y no se llama solo desde `encolarConfirmacion` porque tiene que
+   * ocurrir **fuera** de la transaccion: la fila recien insertada no existe para otra
+   * consulta hasta que la transaccion confirma, y un worker despertado antes de tiempo
+   * no encuentra nada y se vuelve a dormir. Lo llama quien cierra la transaccion.
+   *
+   * Es una optimizacion, no un mecanismo: si el worker corre en otro proceso —el
+   * despliegue del VPS— esta llamada no hace nada y el sondeo sigue siendo quien
+   * entrega. Por eso el intervalo es corto.
+   */
+  despertarAlWorker(): void {
+    this.worker.despertar();
+  }
 
   /**
    * Encola la confirmacion de una cita recien reservada.

@@ -9,39 +9,70 @@ solo; si hay que sacrificar algo, se sacrifica en pantalla ancha.
 
 ## Qué entra y qué no
 
-Entra: **nombre, duración y precio**, más el chevron que indica que hay detalle.
+Entra: **portada, nombre, duración y precio**, más el chevron que indica que hay detalle.
 
 Queda fuera a propósito:
 
 - **La descripción.** Es el campo que satura la lista y el que menos ayuda a elegir en una
   cuadrícula. Va en el detalle.
-- **La imagen.** `Servicio.imagenUrl` es opcional, así que en un catálogo real unas cards
-  tendrían foto y otras no, y la grilla se ve rota. Además es lo que más pesa y lo primero
-  que satura 360 px. Va en el detalle, que es donde el espacio sobra.
 - **Los adicionales.** Pertenecen al flujo de reserva, no al catálogo.
 
-Regla para futuras discusiones: agregar un dato a esta card exige quitar otro.
+Regla para futuras discusiones: agregar un **dato** a esta card exige quitar otro.
+
+### La imagen entró, y por qué la objeción ya no aplica
+
+Este spec la dejaba fuera con dos argumentos. El primero se resolvió; el segundo se pagó a
+sabiendas.
+
+**"Unas cards tendrían foto y otras no, y la grilla se ve rota."** Era el argumento de peso, y
+deja de valer cuando el hueco de la foto lo llena algo con la misma forma: sin `imagenUrl`, la
+portada muestra la **inicial del nombre** sobre `--color-accent-bg`, ocupando exactamente la
+misma caja. Es el mismo mecanismo que ya justificaba el avatar del especialista
+(`08-pagina-especialistas.md`), aplicado aquí. La condición es esa y no otra: **si algún día
+el fallback deja de llenar la caja entera, la imagen vuelve al detalle.**
+
+**"Es lo que más pesa y lo primero que satura 360 px."** Sigue siendo cierto y es un costo
+aceptado, no eliminado. Se acota con `loading="lazy"` en `Thumbnail` —una rejilla de catálogo
+casi nunca entra entera en pantalla— y con la relación de aspecto fija, que reserva el hueco
+antes de que la imagen llegue y evita el salto. Lo que no se hace es servir la misma foto a
+360 px y a 1280: cuando exista un endpoint que dé varios tamaños, aquí va un `srcset`.
+
+La portada **no** es un dato más compitiendo en la cuadrícula de texto: vive encima de ella,
+a sangre, y por eso no obliga a quitar nada de las dos filas de abajo.
 
 ## Estructura
 
-Dos filas de contenido más el canalón del chevron, igual en móvil y en escritorio:
+Portada a sangre y, debajo, dos filas de contenido más el canalón del chevron, igual en móvil
+y en escritorio:
 
 ```
 ┌────────────────────────────────────┐
-│ Corte y peinado                    │  nombre, hasta 2 lineas
-│                                 ›  │  chevron: canalon fijo, centrado
+│                                    │
+│              PORTADA               │  a sangre, 4/3 (apaisada: no es un retrato)
+│                                    │
+├────────────────────────────────────┤
+│ Corte y peinado                 ›  │  nombre, hasta 2 lineas · chevron
 │ 45 min                  ₡ 12.500   │  duracion (muted) · precio (ambar)
 └────────────────────────────────────┘
 ```
+
+El relleno es del bloque de texto, no de la card: la foto tiene que llegar al borde. Por eso
+la card usa `CARD_MEDIA_INTERACTIVE_CLASSES` y no la variante con `p-4`.
+
+Sobre la foto va el **foco** (`foco-imagen`): los bordes y sobre todo el pie bajan de brillo,
+para que el nombre no compita con la zona más clara de la imagen. Se aplica solo cuando hay
+`img` de verdad —`group-has-[img]`, no el `src`, porque una URL podrida ya cayó al
+monograma— y sobre el monograma se vería como un error de carga, no como foco.
 
 El precio **no** comparte fila con el nombre. Es la decisión que hace que la card aguante
 cualquier teléfono: un nombre largo empuja hacia abajo, nunca aplasta el precio. Nombre con
 `line-clamp-2`; el precio con `whitespace-nowrap` y `tabular-nums`, para que no se parta ni
 baile entre filas.
 
-El chevron vive en su propia columna al borde derecho, centrado sobre el alto de la card. El
-precio se alinea al borde del **contenido**, no al de la card, así que los dos conviven en el
-lado derecho sin tocarse.
+El chevron vive en su propia columna al borde derecho del bloque de texto, a la altura del
+nombre —ya no centrado sobre el alto de la card, que ahora lo manda la portada—. El precio se
+alinea al mismo borde una fila más abajo, así que los dos conviven en el lado derecho sin
+tocarse.
 
 Jerarquía: el precio es el elemento de mayor peso visual —tamaño y negrita, más
 `--color-price`—, por encima del nombre. La duración es el dato más callado, en
@@ -101,9 +132,13 @@ define: devuelve únicamente los `activo` y sin campos internos.
 
 ## Estados
 
-Se reutiliza el patrón que ya existe: `Spinner` mientras carga, `EmptyState` si no hay
-servicios. No hace falta esqueleto de carga: a este volumen la lista llega antes de que el
-salto de layout se note, y sería otro componente que mantener.
+`EmptyState` si no hay servicios, y **esqueleto** —no `Spinner`— mientras carga:
+`SkeletonMediaCard` con la misma relación de aspecto que la portada.
+
+Este spec decía lo contrario ("no hace falta esqueleto: a este volumen la lista llega antes de
+que el salto de layout se note"). Eso valía cuando la card eran dos líneas de texto. Con una
+portada de por medio el salto pasó a ser de cientos de píxeles por fila, que es exactamente lo
+que un esqueleto existe para evitar: la premisa cambió con la imagen, no la opinión.
 
 ## Verificación
 

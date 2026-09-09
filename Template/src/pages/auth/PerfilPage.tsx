@@ -133,7 +133,7 @@ export function PerfilPage() {
           )}
           {guardado && !hayCambios && (
             <div className="sm:col-span-2">
-              <Alert>Sus datos quedaron guardados.</Alert>
+              <Alert variant="success">Sus datos quedaron guardados.</Alert>
             </div>
           )}
 

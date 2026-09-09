@@ -28,6 +28,8 @@ npm run test:cov
 
 Run a single test file: `npx vitest run src/path/to/file.spec.ts`.
 
+Backend integration tests (`test:e2e`) are CI-only — not expected to run locally.
+
 ### Template (React + Vite)
 
 ```bash

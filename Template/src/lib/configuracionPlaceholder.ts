@@ -10,6 +10,7 @@ export type ConfiguracionNegocio = {
   locale: string;
   terminoEmpleadoPlural: string;
   terminoServicioPlural: string;
+  terminoProductoPlural: string;
 };
 
 export const configuracionPlaceholder: ConfiguracionNegocio = {
@@ -20,4 +21,5 @@ export const configuracionPlaceholder: ConfiguracionNegocio = {
   locale: 'es',
   terminoEmpleadoPlural: 'Especialistas',
   terminoServicioPlural: 'Servicios',
+  terminoProductoPlural: 'Productos',
 };

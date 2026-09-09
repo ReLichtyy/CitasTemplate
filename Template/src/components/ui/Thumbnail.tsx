@@ -26,6 +26,8 @@ export function Thumbnail({ src, fallback, alt = '', className = '' }: Thumbnail
       <img
         src={src}
         alt={alt}
+        // Una rejilla de catalogo son N fotos que casi nunca entran todas en pantalla.
+        loading="lazy"
         onError={() => setEstado({ src, fallo: true })}
         className={`object-cover ${clases}`}
       />

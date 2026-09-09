@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Button } from './Button';
+import { Dialogo } from './Dialogo';
 
 type ModalProps = {
   open: boolean;
@@ -8,49 +9,14 @@ type ModalProps = {
   children: ReactNode;
 };
 
-// Usa el <dialog> nativo con showModal(): trae Escape, trampa de foco e inertizado del
-// resto de la pagina sin codigo propio. Se cierra con la X, con el boton Cerrar, con
-// Escape y con click en el backdrop.
+// Modal de contenido: cabecera con titulo y X, cuerpo con scroll y pie con Cerrar. La
+// mecanica del dialogo la pone `Dialogo`; aqui solo vive el cromo. Se cierra con la X, con
+// el boton Cerrar, con Escape y con click en el backdrop.
 export function Modal({ open, onClose, titulo, children }: ModalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const tituloId = useId();
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open && !dialog.open) {
-      dialog.showModal();
-    } else if (!open && dialog.open) {
-      dialog.close();
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const previo = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previo;
-    };
-  }, [open]);
-
-  // `hidden open:flex`: el <dialog> cerrado ya tiene display:none del navegador, y darle
-  // flex directo lo dejaria visible siempre. Con la columna en flex, solo el cuerpo hace
-  // scroll: la X y el boton Cerrar quedan a la vista en cualquier posicion.
   return (
-    <dialog
-      ref={dialogRef}
-      aria-labelledby={tituloId}
-      onClose={onClose}
-      onClick={(event) => {
-        // showModal() centra el dialog y lo estira al viewport: un click cuyo target es el
-        // propio <dialog> (y no su contenido) cae en el backdrop.
-        if (event.target === dialogRef.current) {
-          onClose();
-        }
-      }}
-      className="m-auto hidden max-h-[85dvh] w-[calc(100%-2rem)] max-w-md animate-modal-in flex-col overflow-hidden rounded-2xl border border-border bg-surface/95 p-0 text-text shadow-2xl shadow-black/20 backdrop-blur-md open:flex backdrop:bg-black/60 backdrop:backdrop-blur-sm"
-    >
+    <Dialogo open={open} onClose={onClose} tituloId={tituloId} className="max-w-md">
       <div className="flex flex-none items-start justify-between gap-3 border-b border-border/70 px-5 py-3.5 sm:px-6 sm:py-4">
         <h2 id={tituloId} className="text-xl font-semibold tracking-tight text-text-h">
           {titulo}
@@ -82,6 +48,6 @@ export function Modal({ open, onClose, titulo, children }: ModalProps) {
           Cerrar
         </Button>
       </div>
-    </dialog>
+    </Dialogo>
   );
 }

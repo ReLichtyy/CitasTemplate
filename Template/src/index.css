@@ -15,6 +15,8 @@
   /* Verde azulado: el precio no puede compartir color con lo que se toca. */
   --color-price: #0f766e;
   --color-danger: #b91c1c;
+  /* Verde desaturado, distinto del teal de --color-price para no confundir precio con exito. */
+  --color-success: #3d784f;
 
   /* Derivados del acento: cambiar --color-accent regenera los cuatro.
      El hover mezcla hacia --color-text-h, asi que oscurece en claro
@@ -22,13 +24,28 @@
   --color-accent-bg: color-mix(in oklab, var(--color-accent) 12%, transparent);
   --color-accent-border: color-mix(in oklab, var(--color-accent) 42%, transparent);
   --color-accent-hover: color-mix(in oklab, var(--color-accent) 82%, var(--color-text-h));
+  /* Prensado: un paso mas oscuro que hover, para que el click se sienta antes de soltar. */
+  --color-accent-active: color-mix(in oklab, var(--color-accent) 88%, black);
   --color-glow: color-mix(in oklab, var(--color-accent) 9%, transparent);
   /* Lineas del grid. Derivadas del borde: un solo tono que ajustar. */
   --color-grid: color-mix(in oklab, var(--color-border) 82%, transparent);
 
-  --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --font-heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, Consolas, monospace;
+  /* Alertas: mismo patron de derivacion que el acento, uno por semantica. */
+  --color-danger-bg: color-mix(in oklab, var(--color-danger) 12%, transparent);
+  --color-danger-border: color-mix(in oklab, var(--color-danger) 42%, transparent);
+  --color-success-bg: color-mix(in oklab, var(--color-success) 12%, transparent);
+  --color-success-border: color-mix(in oklab, var(--color-success) 42%, transparent);
+
+  /* Ledger: EB Garamond para display (titulos, precios), Archivo para UI, IBM Plex Mono
+     para lo que no es prosa (codigos, confirmaciones). Display solo arriba de 20px. */
+  --font-sans: 'Archivo', 'Helvetica Neue', Helvetica, system-ui, sans-serif;
+  --font-heading: 'EB Garamond', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+
+  /* Eyebrow: el caption en versalitas que encabeza una seccion. El par tamano/tracking se
+     repetia entre corchetes en cada seccion que lo usaba; ahora lo aplica `Eyebrow`. */
+  --text-eyebrow: 0.6875rem;
+  --tracking-eyebrow: 0.14em;
 }
 
 /* Oscuro es opt-in, no automatico: el producto es claro por defecto.
@@ -44,6 +61,7 @@
   --color-accent-fg: #2a1206;
   --color-price: #2dd4bf;
   --color-danger: #f87171;
+  --color-success: #7fbc8f;
 }
 
 /* Animaciones. No dependen del tema, por eso viven en su propio bloque. */
@@ -72,6 +90,57 @@
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: -160% 0;
+  }
+  to {
+    background-position: 260% 0;
+  }
+}
+
+/* Placeholder de carga: barrido de brillo sobre el borde, nunca el acento (no es una accion).
+   prefers-reduced-motion ya lo apaga mas abajo, junto con el resto de las animaciones. */
+/* Foco de una imagen dentro de una card: el centro se deja como esta y los bordes bajan de
+   brillo, con mas peso abajo, que es donde se apoya el texto. No son tokens de color porque
+   no pintan un color: son tinta con alfa que oscurece lo que haya debajo, y tienen que
+   funcionar igual sobre cualquier foto y en los dos temas. */
+@utility foco-imagen {
+  background:
+    linear-gradient(to top, rgba(13, 11, 8, 0.55) 0%, rgba(13, 11, 8, 0.12) 34%, transparent 60%),
+    radial-gradient(120% 95% at 50% 42%, transparent 45%, rgba(13, 11, 8, 0.34) 100%);
+}
+
+@keyframes marquee-right {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0%);
+  }
+}
+
+/* La pista trae el contenido duplicado una vez (mismo dato real, repetido para el loop) y
+   recorre solo la primera mitad: en 0% ya esta en el punto donde 100% vuelve a caer, asi
+   que el salto no se nota. Se pausa en hover para quien la quiera leer. */
+@utility marquee-track {
+  animation: marquee-right 32s linear infinite;
+  &:hover {
+    animation-play-state: paused;
+  }
+}
+
+@utility skeleton {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-border) 20%,
+    var(--color-surface) 42%,
+    var(--color-border) 64%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.7s ease-in-out infinite;
 }
 
 /* Entrada escalonada de los hijos directos: la usan las rejillas de cards. El retraso se
@@ -177,11 +246,14 @@ body::before {
   flex-direction: column;
 }
 
-/* 600, no 500: a 500 los titulos se leian como documentacion, no como producto. */
+/* Display serif arriba de 20px, como pide el pairing Ledger: peso 400 alcanza porque un
+   old-style serif ya trae contraste propio, y 600 en EB Garamond se ve pesado. El tracking
+   negativo compensa el interletrado abierto del serif a tamano grande. */
 h1,
 h2,
 h3 {
   font-family: var(--font-heading);
-  font-weight: 600;
+  font-weight: 400;
+  letter-spacing: -0.012em;
   color: var(--color-text-h);
 }

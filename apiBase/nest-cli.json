@@ -3,6 +3,9 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "//": "Sin esto la imagen de la confirmacion no llega a dist/ y el envio falla solo en produccion, que es el peor sitio para enterarse.",
+    "assets": [{ "include": "notificaciones/assets/**", "outDir": "dist" }],
+    "watchAssets": true
   }
 }

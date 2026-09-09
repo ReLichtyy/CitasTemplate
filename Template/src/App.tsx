@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import { LandingPage } from './pages/publico/LandingPage';
 import { ServiciosPage } from './pages/publico/ServiciosPage';
 import { EquipoPage } from './pages/publico/EquipoPage';
+import { ProductosPage } from './pages/publico/ProductosPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { PerfilPage } from './pages/auth/PerfilPage';
@@ -36,6 +37,7 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/servicios" element={<ServiciosPage />} />
         <Route path="/equipo" element={<EquipoPage />} />
+        <Route path="/productos" element={<ProductosPage />} />
         {/* Reservar es publico: se agenda como invitado dando el telefono. La cita se
             crea igual en el servidor, que sigue siendo quien decide de quien es. */}
         <Route path="/citas/reservar" element={<ReservarPage />} />

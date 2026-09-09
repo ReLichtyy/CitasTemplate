@@ -29,29 +29,59 @@ una sola lista larga. Es el error más probable de esta página.
 
 ## EspecialistaCard
 
-Componente nuevo: `components/ui/EspecialistaCard.tsx`. Mismo esqueleto que
-`ServicioCard`, misma primitiva `Card`, mismo chevron.
+Componente nuevo: `components/ui/EspecialistaCard.tsx`. Misma primitiva `Card` y mismo
+chevron que `ServicioCard`, pero **la foto manda**: es una card de retrato, no una fila.
 
 ```
-┌────────────────────────────────────┐
-│ ( JC )  Joshua Calero           ›  │
-│         Barbero senior             │
-└────────────────────────────────────┘
+┌──────────────────────┐
+│                      │
+│        FOTO          │  a sangre: 1/1 en movil, 4/5 desde sm
+│                      │
+├──────────────────────┤
+│ Joshua Calero  4.8 › │  nombre (hasta 2 lineas) · rating · chevron
+│ Barbero senior       │  especialidad, una linea
+└──────────────────────┘
 ```
 
-Entra: **avatar, nombre y especialidad.** Nada más. La `bio` va en el detalle, por lo mismo
-que la descripción del servicio no va en su card.
+Entra: **foto, nombre, especialidad y rating.** Nada más. La `bio` va en el detalle, por lo
+mismo que la descripción del servicio no va en su card.
 
-**El avatar resuelve el problema que la imagen del servicio no podía.** `Empleado.fotoUrl`
-también es opcional, pero aquí sí hay un reemplazo con la misma forma: las **iniciales** del
-nombre sobre `--color-accent-bg`, en `--color-accent`. Toda card mide igual haya foto o no,
-y la rejilla no se ve rota. Por eso el especialista lleva imagen y el servicio no: no es
-inconsistencia, es que existe un fallback creíble para una persona y no para un servicio.
+**La foto se sostiene en su reemplazo.** `Empleado.fotoUrl` es opcional, pero aquí hay un
+sustituto con la misma forma: las **iniciales** del nombre sobre `--color-accent-bg`, en
+`--color-accent`, llenando la misma caja que llenaría la foto. Toda card mide igual haya foto
+o no, y la rejilla no se ve rota.
 
-Círculo `size-12` en móvil y `sm:size-14` desde `sm` (48 y 56 px), `shrink-0`. Foto con
-`object-cover`. Iniciales
-derivadas de `nombre` y `apellido`; nunca colores aleatorios por persona, que es justo el
-tipo de detalle que satura.
+Ese mecanismo era, al principio, la diferencia entre esta card y la de servicio —una persona
+tiene iniciales creíbles y un servicio no—. Ya no lo es: el servicio usa la **inicial de su
+nombre** con el mismo criterio, así que las dos cards llevan portada y comparten
+`CardCover`. Lo que se mantiene es la condición, no la excepción: **portada solo mientras el
+fallback llene la caja entera.**
+
+Esa condición —el fallback llena la caja entera— es lo que permite **agrandar** la foto sin
+romper nada, y es la razón de que la card haya pasado del avatar `size-12` a un retrato a
+sangre. Si alguna vez el fallback deja de ocupar el mismo hueco que la foto, la card vuelve a
+la fila.
+
+Relación de aspecto `aspect-square` en móvil y `sm:aspect-4/5` desde `sm`: a una columna, un
+4/5 obliga a scrollear una card entera por persona. La de servicio es `aspect-4/3` —apaisada,
+porque no es un retrato—; es el único parámetro que las separa.
+
+Foto con `object-cover`, algo desaturada en reposo y a color completo con el `hover` de la
+card, más un acercamiento de `scale-105` —por eso el contenedor recorta—. Encima va el
+**foco** (`foco-imagen`): bordes y pie con menos brillo, para que el nombre no compita con la
+zona más clara de la foto. Solo con `img` de verdad: sobre las iniciales, oscurecer se lee
+como error de carga.
+
+En el **detalle** la imagen va limpia —sin foco ni desaturación— y más grande: ahí la foto es
+el contenido, no el fondo de un título.
+
+Iniciales derivadas de `nombre` y `apellido`; nunca colores aleatorios por persona, que es
+justo el tipo de detalle que satura.
+
+El relleno **no** es de la card sino del bloque de texto: la foto tiene que llegar al borde.
+Por eso `Card` expone `CARD_MEDIA_INTERACTIVE_CLASSES` —cáscara, recorte y comportamiento,
+sin `p-4`— además de la variante con relleno. No se resuelve concatenando un `p-0`: dos
+utilidades de la misma especificidad las ordena la hoja generada, no la plantilla.
 
 Nombre en `text-h`, especialidad debajo en `--color-text-muted`. Si `especialidadId` es nulo,
 la segunda línea se omite y la card se encoge; no se rellena con un guion.
@@ -64,6 +94,11 @@ crear, con la misma condición que el detalle de servicio: sin ella, no hay enla
 Igual que la de servicios: una columna hasta `sm`, dos en `sm`, tres desde `lg`, `gap-3` /
 `gap-4`. Las dos secciones comparten la misma rejilla a propósito — dos rejillas distintas en
 la misma página se ven como un error de maquetación.
+
+Lo que comparten es la **geometría** —columnas y separación—, no el alto de la card: la de
+especialista es un retrato y la de servicio una fila de dos líneas. Son dos tipos de
+contenido en dos secciones separadas por mucho aire; lo que se leería como error de
+maquetación es que no coincidieran las columnas, no que no coincidan los altos.
 
 ## Datos
 
@@ -89,6 +124,12 @@ quita es el enlace del navbar, no la ruta — el detalle `/servicios/:id` cuelga
 360, 768 y 1280 px. En 360: nombres largos de especialista con `line-clamp-2`, iniciales
 legibles, chevrones alineados en ambas rejillas, y las dos secciones claramente separadas al
 hacer scroll. Sin scroll horizontal.
+
+Dos casos propios de la portada: una rejilla donde **solo algunos** tienen `fotoUrl` —las
+cards tienen que seguir midiendo igual— y el paso de cargando a cargado, que no puede saltar.
+Las dos secciones usan `SkeletonMediaCard`, cada una con el `aspecto` de su card: `aspect-square
+sm:aspect-4/5` la de especialistas, `aspect-4/3` la de servicios. Un placeholder con otra
+forma es el propio salto que se quería evitar.
 
 ## Estado · conectado a la base
 
