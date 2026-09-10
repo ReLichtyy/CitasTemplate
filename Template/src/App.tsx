@@ -14,6 +14,7 @@ import { EditarCitaPage } from './pages/citas/EditarCitaPage';
 import { DetalleCitaPage } from './pages/citas/DetalleCitaPage';
 import { ServiciosListPage } from './pages/gestion/servicios/ServiciosListPage';
 import { ServicioDetallePage } from './pages/gestion/servicios/ServicioDetallePage';
+import { ProductosListPage } from './pages/gestion/productos/ProductosListPage';
 import { AdicionalesListPage } from './pages/gestion/adicionales/AdicionalesListPage';
 import { AdicionalDetallePage } from './pages/gestion/adicionales/AdicionalDetallePage';
 import { EmpleadosListPage } from './pages/gestion/empleados/EmpleadosListPage';
@@ -69,6 +70,13 @@ function App() {
           <Route element={<RoleRoute allow={['ADMIN', 'EMPLEADO']} />}>
             <Route path="/gestion/servicios" element={<ServiciosListPage />} />
             <Route path="/gestion/servicios/:id" element={<ServicioDetallePage />} />
+            {/* Productos es la unica gestion cerrada a ADMIN: en el API, hasta la
+                *lectura* `GET /productos/gestion` es `@Roles(ADMIN)` —un empleado atiende
+                citas, no fija precios—. Sin este RoleRoute propio, un EMPLEADO llegaria a
+                la pantalla y la veria fallar entera con 403. */}
+            <Route element={<RoleRoute allow={['ADMIN']} />}>
+              <Route path="/gestion/productos" element={<ProductosListPage />} />
+            </Route>
             <Route path="/gestion/adicionales" element={<AdicionalesListPage />} />
             <Route path="/gestion/adicionales/:id" element={<AdicionalDetallePage />} />
             <Route path="/gestion/empleados" element={<EmpleadosListPage />} />

@@ -1,0 +1,215 @@
+# Despliegue del VPS. Cuatro contenedores: la app entera (frontend + API + worker +
+# WAHA, una sola imagen, Dockerfile en la raiz), MariaDB, el respaldo y el vigia.
+#
+# La base va aparte a proposito: su volumen no debe depender del ciclo de vida de la
+# app, que se reconstruye en cada despliegue.
+#
+# Este archivo sirve para las dos formas de desplegar, y esa es la razon de que tenga
+# `build` e `image` a la vez:
+#   - Dokploy (lo normal): importa este compose, Traefik lee las etiquetas de abajo y
+#     pone el dominio y el TLS. Ver DEPLOY.md.
+#   - A mano (emergencia, o VPS sin Dokploy): scripts/deploy.sh, que publica en loopback
+#     y no necesita Traefik.
+#
+#   cp docker/.env.vps.example .env.vps   # y poner valores reales
+#   docker compose -f compose.vps.yml --env-file .env.vps up -d
+
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-citas_template}
+      MARIADB_USER: ${MARIADB_USER:-citas}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+    # Sin `ports`: la base solo existe dentro de la red interna. Para un dump se entra
+    # con `docker compose exec db`, no abriendo un puerto.
+    volumes:
+      - citas-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks: [interna]
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # El frontend pega al API por ruta relativa: mismo origen, sin CORS.
+        VITE_API_URL: /api
+    # Con CI, esta es la imagen que GitHub Actions publica y el VPS solo baja. Sin CI,
+    # es el nombre con el que queda la imagen compilada aqui.
+    image: ${IMAGEN:-citas:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Solo loopback, y solo para `scripts/deploy.sh`, el healthcheck y un `curl` de
+      # diagnostico. Con Dokploy el trafico real no pasa por aqui: entra por Traefik a
+      # traves de dokploy-network. Publicar en 0.0.0.0 seria servir el sitio en claro.
+      - "127.0.0.1:${PUERTO_PUBLICO:-8080}:80"
+    environment:
+      TZ: ${TZ:-America/Bogota}
+
+      # --- API ---------------------------------------------------------------
+      # `db` es el nombre del servicio: la resuelve el DNS de la red interna.
+      # El usuario es el de la app, no root: `migrate deploy` no crea shadow database.
+      DATABASE_URL: mysql://${MARIADB_USER:-citas}:${MARIADB_PASSWORD}@db:3306/${MARIADB_DATABASE:-citas_template}
+      # URL publica del sitio. El entrypoint deriva de aqui CORS_ORIGIN y FRONTEND_URL.
+      APP_URL: ${APP_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      # Saltos de proxy hasta el API: Traefik + el nginx de este contenedor.
+      TRUST_PROXY: ${TRUST_PROXY:-2}
+      SEED_PASSWORD: ""
+
+      NOTIFICACIONES_INTERVALO_MS: ${NOTIFICACIONES_INTERVALO_MS:-20000}
+      NOTIFICACIONES_LOTE: ${NOTIFICACIONES_LOTE:-20}
+      NOTIFICACIONES_MAX_INTENTOS: ${NOTIFICACIONES_MAX_INTENTOS:-4}
+
+      EXTERNAL_API_BASE_URL: ${EXTERNAL_API_BASE_URL:-}
+      EXTERNAL_API_KEY: ${EXTERNAL_API_KEY:-}
+      EXTERNAL_API_TIMEOUT_MS: ${EXTERNAL_API_TIMEOUT_MS:-10000}
+      EXTERNAL_API_SYNC_CRON: ${EXTERNAL_API_SYNC_CRON:-*/15 * * * *}
+
+      # --- Lado del API que habla con WAHA -----------------------------------
+      # Loopback: WAHA corre en este mismo contenedor. Ni red de Docker ni DNS de por
+      # medio, que es la razon de que esten juntos.
+      WAHA_URL: http://127.0.0.1:3000
+      WAHA_SESSION: ${WAHA_SESSION:-default}
+      WAHA_TIMEOUT_MS: ${WAHA_TIMEOUT_MS:-15000}
+      # El texto plano de la clave. WAHA solo ve su hash (abajo).
+      WAHA_API_KEY: ${WAHA_API_KEY}
+      WAHA_HOOK_HMAC_KEY: ${WAHA_HOOK_HMAC_KEY}
+
+      # --- WAHA --------------------------------------------------------------
+      # El HASH sha512 de WAHA_API_KEY, no la clave: asi el secreto en claro no aparece
+      # en un `docker inspect` del proceso de WAHA.
+      WHATSAPP_API_KEY: ${WAHA_API_KEY_HASH}
+      # Panel del QR y referencia del API: apagados. Es una interfaz con una sesion de
+      # WhatsApp detras; aca el pareo se hace por /api/{session}/auth/qr.
+      WAHA_DASHBOARD_ENABLED: "false"
+      WHATSAPP_SWAGGER_ENABLED: "false"
+      WHATSAPP_RESTART_ALL_SESSIONS: "True"
+      WHATSAPP_DEFAULT_ENGINE: NOWEB
+      WHATSAPP_DEFAULT_ENGINE_NOWEB_STORE_ENABLED: "True"
+      WHATSAPP_DEFAULT_ENGINE_NOWEB_STORE_FULLSYNC: "False"
+      # Mismo contenedor: el webhook no sale a ninguna red.
+      WHATSAPP_HOOK_URL: http://127.0.0.1:8080/webhooks/whatsapp
+      WHATSAPP_HOOK_EVENTS: message,message.ack,session.status
+      WHATSAPP_HOOK_HMAC_KEY: ${WAHA_HOOK_HMAC_KEY}
+      WAHA_SESSION_CONFIG_IGNORE_GROUPS: "True"
+      WAHA_SESSION_CONFIG_IGNORE_BROADCAST: "True"
+      WAHA_SESSION_CONFIG_IGNORE_STATUS: "True"
+      WAHA_SESSION_CONFIG_IGNORE_CHANNELS: "True"
+      # Poner false deja el resto de la app funcionando con el gateway que escribe al
+      # log, sin arrancar WhatsApp.
+      WAHA_AUTOSTART: ${WAHA_AUTOSTART:-true}
+    volumes:
+      # Perder este volumen es volver a escanear el QR.
+      - waha-sessions:/app/.sessions
+    # WAHA con NOWEB reconstruye estado en memoria al recuperar sesiones; el limite evita
+    # que un pico se lleve el VPS entero por delante.
+    mem_limit: ${MEM_LIMIT:-1500m}
+    logging: *logging
+    # dokploy-network es por donde Traefik alcanza este contenedor. `interna` es por
+    # donde este contenedor alcanza la base, que no esta en dokploy-network justamente
+    # para que Traefik no pueda verla.
+    networks: [interna, dokploy-network]
+    labels:
+      # Etiquetas de Traefik (el proxy que trae Dokploy). Fuera de Dokploy son inertes:
+      # sin Traefik escuchandolas, no hacen nada.
+      - "traefik.enable=true"
+      - "traefik.docker.network=dokploy-network"
+      # Router en claro: solo existe para redirigir a HTTPS.
+      - "traefik.http.routers.citas-http.rule=Host(`${DOMINIO}`)"
+      - "traefik.http.routers.citas-http.entrypoints=web"
+      - "traefik.http.routers.citas-http.middlewares=citas-a-https"
+      - "traefik.http.middlewares.citas-a-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.citas-a-https.redirectscheme.permanent=true"
+      # Router real.
+      - "traefik.http.routers.citas.rule=Host(`${DOMINIO}`)"
+      - "traefik.http.routers.citas.entrypoints=websecure"
+      - "traefik.http.routers.citas.tls=true"
+      - "traefik.http.routers.citas.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.citas.middlewares=citas-hsts"
+      # HSTS: el navegador no vuelve a intentar en claro. Un año, que es lo que pide la
+      # lista de precarga. Solo tiene sentido con el certificado ya funcionando.
+      - "traefik.http.middlewares.citas-hsts.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.citas-hsts.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.citas-hsts.headers.forceSTSHeader=true"
+      # El puerto del contenedor, no el del host: nginx.
+      - "traefik.http.services.citas.loadbalancer.server.port=80"
+
+  # --- Respaldo -------------------------------------------------------------
+  # Un dump diario, verificado, con retencion. Usa la misma imagen de MariaDB porque ya
+  # trae `mariadb-dump` en la version exacta del servidor: un dump hecho con otra version
+  # del cliente es la clase de detalle que solo se descubre al restaurar.
+  respaldo:
+    image: mariadb:11.4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-America/Bogota}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-citas_template}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      RESPALDO_INTERVALO_S: ${RESPALDO_INTERVALO_S:-86400}
+      RESPALDO_RETENCION_DIAS: ${RESPALDO_RETENCION_DIAS:-14}
+      RESPALDO_ESPERA_INICIAL_S: ${RESPALDO_ESPERA_INICIAL_S:-120}
+      ALERTA_WEBHOOK_URL: ${ALERTA_WEBHOOK_URL:-}
+      ALERTA_FORMATO: ${ALERTA_FORMATO:-json}
+      ALERTA_ETIQUETA: ${ALERTA_ETIQUETA:-citas}
+    entrypoint: ["/bin/sh", "/respaldo.sh"]
+    volumes:
+      - ./docker/respaldo/respaldo.sh:/respaldo.sh:ro
+      # Bind mount a proposito: un respaldo que solo vive en un volumen de Docker es un
+      # respaldo que no se puede copiar fuera del VPS sin entrar a Docker.
+      - ${RESPALDOS_DIR:-./respaldos}:/respaldos
+    logging: *logging
+    networks: [interna]
+
+  # --- Vigia ----------------------------------------------------------------
+  # Mira /health y avisa cuando deja de responder. No reemplaza a un monitor externo
+  # (este muere con el VPS, y esa es justo la caida que hay que enterarse); cubre lo que
+  # el externo no ve barato: la app caida con el VPS arriba.
+  vigia:
+    image: curlimages/curl:8.11.1
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      TZ: ${TZ:-America/Bogota}
+      VIGIA_URL: http://app/health
+      VIGIA_INTERVALO_S: ${VIGIA_INTERVALO_S:-60}
+      VIGIA_UMBRAL: ${VIGIA_UMBRAL:-3}
+      ALERTA_WEBHOOK_URL: ${ALERTA_WEBHOOK_URL:-}
+      ALERTA_FORMATO: ${ALERTA_FORMATO:-json}
+      ALERTA_ETIQUETA: ${ALERTA_ETIQUETA:-citas}
+    entrypoint: ["/bin/sh", "/vigia.sh"]
+    volumes:
+      - ./docker/vigia/vigia.sh:/vigia.sh:ro
+    logging: *logging
+    networks: [interna]
+
+volumes:
+  citas-db-data:
+  waha-sessions:
+
+networks:
+  interna:
+    driver: bridge
+  # La crea Dokploy. `scripts/deploy.sh` la crea si falta, para que este mismo archivo
+  # sirva en un VPS sin Dokploy.
+  dokploy-network:
+    external: true

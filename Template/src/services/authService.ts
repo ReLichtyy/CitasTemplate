@@ -34,7 +34,23 @@ export type UsuarioActual = {
  * un `GET /auth/me` solo para saber que rol pintar en el navbar. No es autorizacion —
  * esa la sigue decidiendo el servidor en cada peticion.
  */
-export type Sesion = { accessToken: string; usuario: UsuarioActual };
+export type Sesion = {
+  accessToken: string;
+  /**
+   * Cuando vence el token, en ISO 8601. Lo calcula el servidor desde el `exp` que el
+   * propio token lleva firmado.
+   *
+   * **No es autorizacion**: el servidor revalida la firma y su `exp` en cada peticion, y
+   * adelantar el reloj del navegador no alarga nada. Sirve para cerrar la sesion **a
+   * tiempo** en vez de descubrir que murio en el primer 401, que suele caer a mitad de un
+   * formulario ya lleno.
+   */
+  expiraEn: string;
+  usuario: UsuarioActual;
+};
+
+/** Cuerpo de `POST /auth/password`. La actual es lo que autoriza el cambio. */
+export type CambioPasswordPayload = { actual: string; nueva: string };
 
 /** Lo unico editable del perfil. El telefono es identidad: cambiarlo es soporte manual. */
 export type PerfilPayload = { nombre: string; apellido?: string; email?: string };
@@ -44,4 +60,11 @@ export const authService = {
   registro: (payload: RegistroPayload) => apiClient.post<Sesion>('/auth/registro', payload),
   me: () => apiClient.get<UsuarioActual>('/auth/me'),
   actualizarPerfil: (payload: PerfilPayload) => apiClient.patch<UsuarioActual>('/auth/me', payload),
+  /**
+   * Cambia la propia contrasena. Devuelve 204 sin cuerpo: **no** entrega un token nuevo,
+   * porque eso daria a entender que los viejos dejaron de valer y no es cierto — las
+   * demas sesiones siguen vivas hasta que sus tokens vencen.
+   */
+  cambiarPassword: (payload: CambioPasswordPayload) =>
+    apiClient.post<void>('/auth/password', payload),
 };

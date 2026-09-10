@@ -1,0 +1,165 @@
+# Verifica, compila la imagen y avisa al VPS.
+#
+# La imagen se compila AQUI y no en el VPS a proposito: compilar el frontend y el API en
+# una maquina de 2 GB mientras sirve al publico es un despliegue lento y un pico de
+# memoria sobre el mismo servidor que tiene que seguir respondiendo. El VPS solo baja una
+# imagen ya hecha.
+#
+# Secretos que usa (Settings → Secrets and variables → Actions). Todos opcionales salvo
+# los del despliegue que se vaya a usar:
+#   DOKPLOY_WEBHOOK_URL   URL de "Redeploy" de la aplicacion en Dokploy. Es el camino normal.
+#   SSH_HOST/SSH_USER/SSH_KEY/SSH_PUERTO/RUTA_VPS   camino alterno: corre scripts/deploy.sh.
+# Si no hay ninguno, el flujo publica la imagen y ahi se queda: desplegar es un
+# `./scripts/deploy.sh` en el VPS.
+
+name: Despliegue
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Para volver a desplegar sin tocar el codigo.
+  workflow_dispatch:
+
+concurrency:
+  # Dos despliegues a la vez sobre el mismo VPS se pisan. El nuevo manda; el viejo se corta.
+  group: despliegue-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Lint, pruebas y compilacion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            apiBase/package-lock.json
+            Template/package-lock.json
+
+      - name: apiBase · dependencias
+        working-directory: apiBase
+        run: npm ci --no-audit --no-fund
+
+      # El cliente de Prisma es codigo generado: sin esto no compila ni el API ni las
+      # pruebas, porque los tipos que importan no existen todavia.
+      - name: apiBase · cliente de Prisma
+        working-directory: apiBase
+        env:
+          DATABASE_URL: mysql://ci:ci@127.0.0.1:3306/ci
+        run: npm run db:generate
+
+      - name: apiBase · lint
+        working-directory: apiBase
+        run: npm run lint
+
+      - name: apiBase · pruebas
+        working-directory: apiBase
+        run: npm run test
+
+      - name: apiBase · compilacion
+        working-directory: apiBase
+        run: npm run build
+
+      - name: Template · dependencias
+        working-directory: Template
+        run: npm ci --no-audit --no-fund
+
+      - name: Template · lint
+        working-directory: Template
+        run: npm run lint
+
+      # Compila con la misma variable que la imagen: si el frontend no compila con la
+      # ruta relativa, se sabe aqui y no en el `docker build`.
+      - name: Template · compilacion
+        working-directory: Template
+        env:
+          VITE_API_URL: /api
+        run: npm run build
+
+  imagen:
+    name: Publicar imagen
+    needs: verificar
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      imagen: ${{ steps.nombre.outputs.imagen }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # GHCR solo acepta nombres en minuscula y el del repositorio tiene mayusculas.
+      - name: Nombre de la imagen
+        id: nombre
+        run: echo "imagen=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Dos etiquetas: `latest` es la que baja el VPS, el sha es a la que se vuelve
+      # cuando hay que volver a una version concreta.
+      - name: Compilar y publicar
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: |
+            VITE_API_URL=/api
+          tags: |
+            ${{ steps.nombre.outputs.imagen }}:latest
+            ${{ steps.nombre.outputs.imagen }}:${{ github.sha }}
+          # La cache de Actions ahorra el `npm ci` de las dos capas de dependencias en
+          # cada despliegue, que es donde se va la mayor parte del tiempo.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  desplegar:
+    name: Desplegar
+    needs: imagen
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Los secretos se traen a nivel de job y no de paso: un `env` declarado en el propio
+    # paso no esta disponible en el `if` de ese mismo paso, y todos los `if` de aqui son
+    # justamente "¿hay secreto?".
+    env:
+      WEBHOOK: ${{ secrets.DOKPLOY_WEBHOOK_URL }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_PUERTO: ${{ secrets.SSH_PUERTO }}
+      RUTA_VPS: ${{ secrets.RUTA_VPS }}
+    steps:
+      # Camino normal: Dokploy baja la imagen nueva y recrea el contenedor.
+      - name: Avisar a Dokploy
+        if: ${{ env.WEBHOOK != '' }}
+        run: curl -fsS -X POST "$WEBHOOK"
+
+      # Camino alterno: VPS sin Dokploy, o despliegue que tiene que esperar al health.
+      - name: Desplegar por SSH
+        if: ${{ env.SSH_HOST != '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/clave
+          chmod 600 ~/.ssh/clave
+          ssh -i ~/.ssh/clave -o StrictHostKeyChecking=accept-new \
+              -p "${SSH_PUERTO:-22}" "$SSH_USER@$SSH_HOST" \
+              "cd '${RUTA_VPS:-~/citas}' && git pull --ff-only && bash ./scripts/deploy.sh"
+
+      - name: Sin destino configurado
+        if: ${{ env.WEBHOOK == '' && env.SSH_HOST == '' }}
+        run: |
+          echo "Imagen publicada, pero no hay DOKPLOY_WEBHOOK_URL ni SSH_HOST."
+          echo "Desplegar con: ./scripts/deploy.sh en el VPS. Ver DEPLOY.md."

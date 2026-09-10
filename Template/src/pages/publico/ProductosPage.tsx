@@ -1,38 +1,55 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { Alert } from '../../components/ui/Alert';
 import { Card } from '../../components/ui/Card';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { Eyebrow } from '../../components/ui/Eyebrow';
 import { ProductoCard } from '../../components/ui/ProductoCard';
 import { ProductoModal } from '../../components/ui/ProductoModal';
 import { SeccionHeader } from '../../components/ui/SeccionHeader';
+import { SkeletonMediaCardGrid } from '../../components/ui/Skeleton';
+import { useRecursoApi } from '../../hooks/useRecursoApi';
 import { configuracionPlaceholder } from '../../lib/configuracionPlaceholder';
-import {
-  categoriasPlaceholder,
-  productosPlaceholder,
-  type Producto,
-} from '../../lib/productosPlaceholder';
+import { productosService } from '../../services/productosService';
+import type { Producto } from '../../types/producto';
 
 // La misma rejilla que los otros dos catalogos: tres rejillas distintas en un mismo sitio se
 // leen como tres maquetaciones distintas.
 const GRID_CLASSES = 'stagger-in grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3';
 
-// Orden de encabezados: un solo h1 (el nombre del catalogo), un h2 por seccion y los cuatro
-// tipos como h3 dentro de la primera. Saltar de h1 a h3 rompe la navegacion por encabezados
-// de un lector de pantalla, que es como se recorre una pagina larga sin verla.
+// Orden de encabezados: un solo h1 (el nombre del catalogo), un h2 por seccion y los tipos
+// como h3 dentro de la primera. Saltar de h1 a h3 rompe la navegacion por encabezados de un
+// lector de pantalla, que es como se recorre una pagina larga sin verla.
 
 /**
  * Catalogo de productos.
  *
- * Los datos son locales (`lib/productosPlaceholder.ts`) porque el dominio todavia no existe
- * en el backend: por eso esta pagina no tiene cargando ni error, y no los simula. Cuando
- * exista `GET /productos` pasa a `useRecursoApi` como los otros catalogos, y lo unico que
- * cambia es de donde salen las dos listas.
+ * Dos lecturas y no una: las categorias traen el texto que ordena la pagina —que tipo de
+ * producto hay y para que sirve cada uno— y los productos llenan las rejillas. Es el mismo
+ * reparto que usa `EquipoPage`, y deja que cada cosa venga de su propia ruta.
+ *
+ * Antes esto salia de `lib/productosPlaceholder.ts`, que ademas era el unico archivo del
+ * frontend con rubro. Ahora el rubro son filas de la base y esta pagina no sabe de cosmetica.
  */
 export function ProductosPage() {
   const { moneda, locale, terminoProductoPlural } = configuracionPlaceholder;
   const [elegido, setElegido] = useState<Producto | null>(null);
 
+  const cargarCategorias = useCallback(() => productosService.categorias(), []);
+  const cargarProductos = useCallback(() => productosService.list(), []);
+
+  const categorias = useRecursoApi(cargarCategorias, []);
+  const productos = useRecursoApi(cargarProductos, []);
+
+  const cargando = categorias.cargando || productos.cargando;
+  // Basta con que falle una: media pagina de catalogo se lee como el catalogo entero, y el
+  // visitante no tiene forma de saber que le falta la otra mitad.
+  const error = categorias.error ?? productos.error;
+
+  const listaCategorias = categorias.datos ?? [];
+  const listaProductos = productos.datos ?? [];
+
   const categoriaElegida = elegido
-    ? categoriasPlaceholder.find((categoria) => categoria.id === elegido.categoriaId)
+    ? listaCategorias.find((categoria) => categoria.id === elegido.categoriaId)
     : null;
 
   return (
@@ -47,65 +64,90 @@ export function ProductosPage() {
           </p>
         </header>
 
+        {error && <Alert>{error}</Alert>}
+
+        {cargando && (
+          <SkeletonMediaCardGrid count={6} className={GRID_CLASSES} aspecto="aspect-4/3" />
+        )}
+
+        {!cargando && !error && listaProductos.length === 0 && (
+          <EmptyState
+            title="Todavia no hay productos"
+            description="Cuando el catalogo este cargado, aparece aqui."
+          />
+        )}
+
         {/* La seccion que ordena el resto: primero que tipo de producto hay y para que sirve
             cada uno, y recien despues el catalogo. Sin esto, una rejilla de nueve frascos
             obliga a deducir la logica leyendo etiquetas. */}
-        <SeccionHeader
-          eyebrow="Que ofrecemos"
-          titulo="Cuatro cuidados, cuatro trabajos distintos"
-          descripcion="Cada tipo resuelve una cosa. Sirven solos, y ordenados en ese mismo orden funcionan mejor."
-          divisor
-        />
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {categoriasPlaceholder.map((categoria, i) => (
-            <Card key={categoria.id} className="flex flex-col gap-2">
-              <Eyebrow tono="acento" className="tabular-nums">
-                {`${i + 1}`.padStart(2, '0')}
-              </Eyebrow>
-              <h3 className="font-heading text-xl font-normal tracking-tight text-text-h sm:text-2xl">
-                {categoria.nombre}
-              </h3>
-              {/* La promesa es la respuesta a "por que me serviria": va antes que el detalle
-                  y con mas peso, porque es lo que decide si sigue leyendo. */}
-              <p className="font-medium text-text-h">{categoria.promesa}</p>
-              <p className="text-sm leading-relaxed text-text-muted">{categoria.descripcion}</p>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {categoriasPlaceholder.map((categoria) => {
-        const productos = productosPlaceholder.filter(
-          (producto) => producto.categoriaId === categoria.id,
-        );
-
-        if (productos.length === 0) {
-          return null;
-        }
-
-        return (
-          <section key={categoria.id} className="flex flex-col gap-8 sm:gap-10">
+        {!cargando && listaCategorias.length > 0 && (
+          <>
             <SeccionHeader
-              eyebrow={`Tipo ${`${categoriasPlaceholder.indexOf(categoria) + 1}`.padStart(2, '0')}`}
-              titulo={categoria.nombre}
-              descripcion={categoria.promesa}
+              eyebrow="Que ofrecemos"
+              titulo="Cada tipo resuelve un trabajo distinto"
+              descripcion="Cada uno resuelve una cosa. Sirven solos, y ordenados en ese mismo orden funcionan mejor."
               divisor
             />
-            <div className={GRID_CLASSES}>
-              {productos.map((producto) => (
-                <ProductoCard
-                  key={producto.id}
-                  producto={producto}
-                  moneda={moneda}
-                  locale={locale}
-                  onSelect={() => setElegido(producto)}
-                />
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {listaCategorias.map((categoria, indice) => (
+                <Card key={categoria.id} className="flex flex-col gap-2">
+                  <Eyebrow tono="acento" className="tabular-nums">
+                    {`${indice + 1}`.padStart(2, '0')}
+                  </Eyebrow>
+                  {/* Sin `font-heading font-normal tracking-tight text-text-h`: index.css ya
+                      se los aplica a todo h3. */}
+                  <h3 className="text-xl sm:text-2xl">{categoria.nombre}</h3>
+                  {/* La promesa es la respuesta a "por que me serviria": va antes que el
+                      detalle y con mas peso, porque es lo que decide si sigue leyendo. */}
+                  <p className="font-medium text-text-h">{categoria.promesa}</p>
+                  {categoria.descripcion && (
+                    <p className="text-sm leading-relaxed text-text-muted">
+                      {categoria.descripcion}
+                    </p>
+                  )}
+                </Card>
               ))}
             </div>
-          </section>
-        );
-      })}
+          </>
+        )}
+      </section>
+
+      {/* Una seccion por categoria, en el orden que trajo el API. El indice sale del propio
+          `map`: antes se buscaba con `indexOf` dentro del recorrido, que es la misma cuenta
+          hecha dos veces. */}
+      {!cargando &&
+        listaCategorias.map((categoria, indice) => {
+          const deLaCategoria = listaProductos.filter(
+            (producto) => producto.categoriaId === categoria.id,
+          );
+
+          if (deLaCategoria.length === 0) {
+            return null;
+          }
+
+          return (
+            <section key={categoria.id} className="flex flex-col gap-8 sm:gap-10">
+              <SeccionHeader
+                eyebrow={`Tipo ${`${indice + 1}`.padStart(2, '0')}`}
+                titulo={categoria.nombre}
+                descripcion={categoria.promesa}
+                divisor
+              />
+              <div className={GRID_CLASSES}>
+                {deLaCategoria.map((producto) => (
+                  <ProductoCard
+                    key={producto.id}
+                    producto={producto}
+                    moneda={moneda}
+                    locale={locale}
+                    onSelect={() => setElegido(producto)}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
 
       <ProductoModal
         producto={elegido}

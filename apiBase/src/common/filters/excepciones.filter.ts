@@ -40,9 +40,32 @@ export class ExcepcionesFilter implements ExceptionFilter {
 
     const message = this.mensaje(exception, status);
 
+    /**
+     * Dos lineas por peticion fallida, y cada una tiene un trabajo distinto: la del
+     * `AccesoInterceptor` dice *que* paso (metodo, ruta, codigo, ms) y esta dice *por
+     * que*. Las dos llevan el mismo `requestId`, que es lo que las une — y lo que une a
+     * las dos con el codigo que el navegador le mostro al usuario.
+     */
+    const detalle = {
+      evento: 'excepcion',
+      metodo: request.method,
+      // Aqui si va la url concreta y no la ruta declarada: para reproducir el fallo hace
+      // falta el id que se pidio.
+      url: request.url,
+      status,
+      // El texto que efectivamente se le devolvio al cliente. Sin esto, un 400 en el log
+      // no dice cual de las diez validaciones del DTO fue.
+      message,
+    };
+
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       // El detalle completo va aqui y solo aqui.
-      this.logger.error(`${request.method} ${request.url}`, exception as Error);
+      this.logger.error(detalle, exception as Error);
+    } else {
+      // Los 4xx se registraban en ningun lado, y son la mayoria de lo que el frontend
+      // provoca: DTO rechazado, token vencido, traslape. Van a `warn` —no son fallas del
+      // servidor— pero van.
+      this.logger.warn(detalle);
     }
 
     response.status(status).json({ success: false, data: null, message });

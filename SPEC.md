@@ -13,6 +13,7 @@ Specs cortos, uno por componente. Cada archivo se lee solo cuando se toca ese co
 | 07 | `Template/src/components/ui/07-card-servicio.md` | `ServicioCard.tsx` |
 | 08 | `Template/src/pages/publico/08-pagina-especialistas.md` | `EquipoPage.tsx` |
 | 09 | `apiBase/src/notificaciones/09-conexion-whatsapp.md` | `notificaciones.module.ts` |
+| 10 | `apiBase/src/common/observabilidad/10-observabilidad.md` | logger, middleware de id, `telemetria/` |
 
 Cada spec vive en la carpeta del código que describe: abrir el módulo es encontrarlo. Este
 archivo es el único índice, y lo que un agente debe leer primero.
@@ -94,3 +95,14 @@ y detrás de una interfaz que la Cloud API oficial pueda implementar sin tocar e
    dependen de WhatsApp y se verifican con `curl`: al terminar el 3, confirmar una cita ya
    funciona de punta a punta pegando el token a mano. Conectar WAHA es el paso 5 y queda
    pendiente hasta que haya VPS y un número dedicado.
+
+10. Observabilidad de los dos lados (`10-observabilidad.md`).
+    **Hecho:** `x-request-id` por petición (middleware + `AsyncLocalStorage`), logger
+    estructurado con formato JSON en producción y texto fuera, línea de acceso por petición
+    y registro de los 4xx —que hasta ahora no dejaban rastro—, y `POST /telemetria/errores`
+    (`@Public()`, con límite por IP y DTO acotado) para lo que solo el navegador ve.
+    En el frontend: `ErrorBoundary` sobre el router, captura de `window.onerror` y de
+    promesas sin atrapar, fallo de red tipado en vez de `"Failed to fetch"`, y el código del
+    fallo visible en pantalla para poder citarlo.
+    Sin tabla y sin servicio externo: los eventos van al log del proceso, y rotarlo es del
+    gestor de procesos.

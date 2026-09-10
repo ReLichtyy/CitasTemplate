@@ -2,7 +2,8 @@
 
 Se cargan solas al trabajar en este workspace. Son las reglas que aplican a **todo** el
 backend; los specs de cada módulo (`prisma/01-…`, `src/citas/02-…`, `src/auth/03-…`,
-`src/common/04-…`) solo cubren lo propio de ese módulo y dan estas por sabidas.
+`src/common/04-…`, `src/common/observabilidad/10-…`) solo cubren lo propio de ese módulo y
+dan estas por sabidas.
 
 ## Forma de una petición
 
@@ -19,6 +20,21 @@ backend; los specs de cada módulo (`prisma/01-…`, `src/citas/02-…`, `src/au
 - Los errores se **lanzan**, no se devuelven. Un servicio nunca retorna un objeto de error.
 - 409 es el único mensaje redactado para que lo lea el usuario final. El resto, genéricos.
 - Nunca salen al cliente: trazas, mensajes de Prisma, nombres de columna, `Usuario.password`.
+
+## Logs
+
+- Todo lo que se registra sale por `Logger` de Nest, y de ahí al logger estructurado
+  (`common/observabilidad/`). Ningún `console.log` en `src/`.
+- Toda petición deja rastro: una línea de acceso siempre, y una de excepción si falló. Las
+  dos llevan el `x-request-id` que también se le devolvió al cliente — ese id es lo único
+  que une el log del servidor con lo que el usuario vio.
+- Los 4xx se registran (`warn`). No son fallas del servidor, pero son la mayoría de lo que
+  el frontend provoca y sin ellos no hay forma de explicar un "no me deja".
+- Los campos van como **objeto**, no interpolados en la cadena: `logger.log({ evento, ms })`.
+  Es lo que se puede filtrar después, y lo que escapa el contenido que viene de fuera.
+- Nada de lo que se registra puede llevar credenciales, tokens (ni el de confirmación de
+  cita, que viaja en un query string) ni `Usuario.password`.
+- Ver `src/common/observabilidad/10-observabilidad.md`.
 
 ## Autorización
 
@@ -57,6 +73,9 @@ backend; los specs de cada módulo (`prisma/01-…`, `src/citas/02-…`, `src/au
   un directorio de quién está registrado.
 - Ningún DTO acepta `rol`, `activo` ni `telefono` en una edición de perfil. El servicio
   además los fija: la defensa no depende de la configuración del `ValidationPipe`.
+- Lo que llegue de un cliente sin autenticar y termine en el log lleva enum cerrado donde
+  se agrupa y tope de largo en cada campo de texto (`telemetria/`). Un campo libre sin tope
+  es el disco del VPS.
 
 ## Secretos
 

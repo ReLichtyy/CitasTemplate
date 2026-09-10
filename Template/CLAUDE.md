@@ -32,7 +32,22 @@ frontend; los specs de cada vista (`src/05-…`, `src/components/ui/07-…`,
 - Iconos como SVG en línea en `components/ui/`, con `currentColor` y `aria-hidden`. Sin
   librería mientras sean menos de ocho.
 - Foco visible siempre: `focus-visible:outline-hidden` más un anillo con el token del acento.
-- Ningún componente ni página llama `fetch` o `apiClient`. Todo pasa por `services/`.
+- Ningún componente ni página llama `fetch` o `apiClient`. Todo pasa por `services/`. La
+  única excepción es `lib/telemetria.ts`, que usa `fetch` pelado a propósito: pasar un
+  reporte de error por `apiClient` haría que un 401 cerrara la sesión o que un reporte
+  fallido disparara otro. Ver `10-observabilidad.md`.
+
+## Errores
+
+- Un fallo del API se muestra donde ocurrió, con `Alert`, y con el texto que devolvió el
+  API — nunca uno inventado. Eso ya lo dan `useRecursoApi` y `useAccionApi`.
+- `ErrorBoundary` (`components/layout/`) es la red de abajo, no el manejo normal: atrapa lo
+  que revienta durante el render y ya no tiene dónde mostrarse. Envuelve al router en
+  `main.tsx`; uno más adentro se cae junto con lo que intentaba atajar.
+- Todo fallo que el usuario ve y que el servidor no puede haber registrado por su cuenta se
+  reporta con `reportarError` (`lib/telemetria.ts`). Un 4xx no: ya quedó en el log del API.
+- Ningún mensaje en pantalla en inglés ni crudo del navegador. `"Failed to fetch"` es un
+  `ApiError` con status 0 y texto propio.
 
 ## Marca
 

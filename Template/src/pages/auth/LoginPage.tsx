@@ -1,21 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ApiError } from '../../api/client';
+import { AuthShell } from '../../components/layout/AuthShell';
 import { Alert } from '../../components/ui/Alert';
 import { Button } from '../../components/ui/Button';
-import { Card } from '../../components/ui/Card';
 import { Field } from '../../components/ui/Field';
+import { useAccionApi } from '../../hooks/useAccionApi';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
 
 /** A donde va quien entra sin venir de ninguna parte. */
 const DESTINO_POR_DEFECTO = '/citas';
-
-function mensajeDe(error: unknown): string {
-  return error instanceof ApiError || error instanceof Error
-    ? error.message
-    : 'No se pudo iniciar sesion.';
-}
 
 export function LoginPage() {
   const { login, isAuthenticated } = useAuth();
@@ -23,8 +17,9 @@ export function LoginPage() {
   const location = useLocation();
 
   const [credenciales, setCredenciales] = useState({ telefono: '', password: '' });
-  const [error, setError] = useState<string | null>(null);
-  const [enviando, setEnviando] = useState(false);
+  // `useAccionApi` trae el `enviando`, el texto del API y —lo que importa aqui— el freno
+  // al segundo envio: dos `submit` seguidos gastaban dos de los diez intentos por IP.
+  const entrar = useAccionApi(authService.login);
 
   // `ProtectedRoute` guarda aqui la ruta que el visitante queria abrir. Volver a ella es
   // el punto de exigir sesion; mandarlo siempre al inicio le hace repetir el camino.
@@ -38,68 +33,61 @@ export function LoginPage() {
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
-    setError(null);
-    setEnviando(true);
-    try {
-      login(await authService.login(credenciales));
+    const sesion = await entrar.ejecutar(credenciales);
+    if (sesion) {
+      login(sesion);
       navigate(destino, { replace: true });
-    } catch (fallo) {
-      setError(mensajeDe(fallo));
-    } finally {
-      setEnviando(false);
     }
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl">Iniciar sesion</h1>
-        <p className="text-sm text-text">
-          Entre con el telefono que dio al agendar. Para reservar no hace falta cuenta.
-        </p>
-      </div>
+    <AuthShell
+      eyebrow="Su cuenta"
+      titulo="Iniciar sesion"
+      descripcion="Entre con el telefono que dio al agendar. Para reservar no hace falta cuenta."
+      pie={
+        <>
+          No tiene cuenta?{' '}
+          <Link to="/auth/registro" className="font-medium text-accent">
+            Crear una
+          </Link>
+        </>
+      }
+    >
+      <form className="flex flex-col gap-4" onSubmit={enviar} noValidate>
+        <Field
+          label="Telefono"
+          type="tel"
+          required
+          autoComplete="tel"
+          autoFocus
+          placeholder="8888 8888"
+          value={credenciales.telefono}
+          disabled={entrar.enviando}
+          onChange={(evento) =>
+            setCredenciales((datos) => ({ ...datos, telefono: evento.target.value }))
+          }
+        />
+        <Field
+          label="Contrasena"
+          type="password"
+          required
+          autoComplete="current-password"
+          value={credenciales.password}
+          disabled={entrar.enviando}
+          onChange={(evento) =>
+            setCredenciales((datos) => ({ ...datos, password: evento.target.value }))
+          }
+        />
 
-      <Card>
-        <form className="flex flex-col gap-4" onSubmit={enviar} noValidate>
-          <Field
-            label="Telefono"
-            type="tel"
-            required
-            autoComplete="tel"
-            autoFocus
-            placeholder="8888 8888"
-            value={credenciales.telefono}
-            onChange={(evento) =>
-              setCredenciales((datos) => ({ ...datos, telefono: evento.target.value }))
-            }
-          />
-          <Field
-            label="Contrasena"
-            type="password"
-            required
-            autoComplete="current-password"
-            value={credenciales.password}
-            onChange={(evento) =>
-              setCredenciales((datos) => ({ ...datos, password: evento.target.value }))
-            }
-          />
+        {/* El texto sale del API. Un telefono inexistente y una contrasena incorrecta
+            devuelven el mismo error a proposito: no se confirma quien esta registrado. */}
+        {entrar.error && <Alert>{entrar.error}</Alert>}
 
-          {/* El texto sale del API. Un telefono inexistente y una contrasena incorrecta
-              devuelven el mismo error a proposito: no se confirma quien esta registrado. */}
-          {error && <Alert>{error}</Alert>}
-
-          <Button type="submit" disabled={enviando}>
-            {enviando ? 'Entrando...' : 'Entrar'}
-          </Button>
-        </form>
-      </Card>
-
-      <p className="text-center text-sm text-text">
-        No tiene cuenta?{' '}
-        <Link to="/auth/registro" className="font-medium text-accent">
-          Crear una
-        </Link>
-      </p>
-    </main>
+        <Button type="submit" disabled={entrar.enviando}>
+          {entrar.enviando ? 'Entrando...' : 'Entrar'}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

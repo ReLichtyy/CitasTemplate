@@ -172,12 +172,25 @@ robada en una cuenta perdida.
 
 ## Lo que quedó fuera, y por qué
 
-- **Cambio de contraseña.** Falta decidir qué se exige para autorizarlo. Hacerlo sin pedir
-  la contraseña actual convierte una sesión robada en una cuenta perdida.
+- ~~**Cambio de contraseña.**~~ **Hecho.** `POST /auth/password` pide la contraseña actual,
+  que era la decisión que faltaba: sin ella, una sesión robada se convierte en la cuenta
+  perdida. Devuelve 204 y **no** entrega un token nuevo, porque los ya emitidos siguen
+  valiendo y dar uno nuevo sugeriría lo contrario. Rechaza además la contraseña igual a la
+  actual y la que contiene el teléfono —que es público, es el nombre de usuario—. Lleva
+  límite por IP aunque no sea `@Public()`: cuesta dos bcrypt y se puede repetir adivinando
+  con una sesión prestada.
 - **Revocación de sesiones.** `JwtStrategy` no consulta la base: el token dice quién es y
   se cree. Desactivar una cuenta no corta las sesiones ya emitidas hasta que el token vence
-  (`JWT_EXPIRES_IN`, 1 día). Cerrarlo del todo pide una lista de revocación, que es una
-  consulta por petición.
+  (`JWT_EXPIRES_IN`, 1 día), y **cambiar la contraseña tampoco las corta** — quien cambia la
+  clave porque sospecha de una sesión ajena no la está cerrando. Cerrarlo del todo pide una
+  lista de revocación, o comparar el `iat` del token contra un `passwordCambiadaEn` en
+  `Usuario`; las dos son una consulta por petición. `AuthService.cambiarPassword` es el
+  punto donde entraría.
+- **Caducidad, del lado del navegador.** El login y el registro devuelven `expiraEn` (ISO,
+  derivado del `exp` que el propio token lleva firmado) y `AuthContext` cierra la sesión
+  sola al llegar. No es autorización —el servidor revalida la firma en cada petición— sino
+  cortesía: sin eso, la sesión muere en el primer 401, que suele caer a mitad de un
+  formulario ya lleno.
 - **Verificación del teléfono.** Es la que sostendría todo lo demás: sin ella, reservar a
   nombre ajeno y reclamar la ficha de un invitado siguen siendo posibles. El punto de
   entrada es `AuthService.registro`.

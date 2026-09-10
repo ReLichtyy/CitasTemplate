@@ -15,7 +15,6 @@ import { useAuth } from '../../context/AuthContext';
 import { configuracionPlaceholder } from '../../lib/configuracionPlaceholder';
 import { iniciales } from '../../lib/especialista';
 import { hoyEnISO } from '../../lib/fechaISO';
-import { authService, type UsuarioActual } from '../../services/authService';
 import { citasService, type CitaReservada, type Disponibilidad } from '../../services/citasService';
 import {
   empleadosService,
@@ -124,7 +123,10 @@ function Paso({
 }
 
 export function ReservarPage() {
-  const { isAuthenticated } = useAuth();
+  // `usuario` sale del contexto y no de un `GET /auth/me` propio: `AuthProvider` ya lo
+  // pidio al arrancar, y una segunda copia aqui se desincroniza en cuanto alguien edita
+  // su perfil en otra pestana.
+  const { isAuthenticated, usuario } = useAuth();
 
   /**
    * Se elige primero a la persona y despues lo que hace: es la pregunta que el cliente
@@ -142,12 +144,21 @@ export function ReservarPage() {
 
   const [horarios, setHorarios] = useState<ResultadoHorarios | null>(null);
 
-  const [contacto, setContacto] = useState<DatosContacto>(CONTACTO_VACIO);
+  /**
+   * Lo que el usuario **escribio**. `null` mientras no toque nada, y entonces el
+   * formulario se deriva de su ficha.
+   *
+   * Antes esto se sembraba desde un efecto al llegar la respuesta de `/auth/me`, y eso
+   * tenia dos fallas: los campos aparecian vacios y se llenaban solos un instante despues,
+   * y si el cliente empezaba a escribir antes de que llegara, la respuesta le pisaba lo
+   * escrito. Derivado no hay ningun instante en que el formulario este vacio teniendo
+   * ficha, ni forma de que algo borre lo que el cliente puso.
+   */
+  const [contactoEditado, setContactoEditado] = useState<DatosContacto | null>(null);
 
   // Desmarcada por defecto: una casilla marcada de antemano no es consentimiento.
 
   const [aceptaWhatsapp, setAceptaWhatsapp] = useState(false);
-  const [guardados, setGuardados] = useState<UsuarioActual | null>(null);
 
   const [enviando, setEnviando] = useState(false);
   const [errorReserva, setErrorReserva] = useState<string | null>(null);
@@ -172,31 +183,6 @@ export function ReservarPage() {
       vigente = false;
     };
   }, []);
-
-  // Los datos guardados solo existen con sesion; sin ella el formulario es la unica
-  // fuente y el telefono es lo que identifica a quien reserva.
-  useEffect(() => {
-    if (!isAuthenticated) {
-      return;
-    }
-    let vigente = true;
-    authService
-      .me()
-      .then((usuario) => {
-        if (!vigente) return;
-        setGuardados(usuario);
-        setContacto({
-          telefono: usuario.telefono,
-          nombre: usuario.nombre,
-          apellido: usuario.apellido ?? '',
-          email: usuario.email ?? '',
-        });
-      })
-      .catch(() => vigente && setGuardados(null));
-    return () => {
-      vigente = false;
-    };
-  }, [isAuthenticated]);
 
   const claveConsulta =
     empleadoId && servicioId && fecha ? `${empleadoId}|${servicioId}|${fecha}` : '';
@@ -228,7 +214,25 @@ export function ReservarPage() {
   const errorHorarios = respuestaVigente?.error ?? null;
   const cargandoHorarios = !!claveConsulta && !respuestaVigente;
 
-  const datosGuardados = isAuthenticated ? guardados : null;
+  // Los datos guardados solo existen con sesion; sin ella el formulario es la unica
+  // fuente y el telefono es lo que identifica a quien reserva.
+  const datosGuardados = isAuthenticated ? usuario : null;
+  const contactoDelPerfil: DatosContacto | null = datosGuardados
+    ? {
+        telefono: datosGuardados.telefono,
+        nombre: datosGuardados.nombre,
+        apellido: datosGuardados.apellido ?? '',
+        email: datosGuardados.email ?? '',
+      }
+    : null;
+  const contacto = contactoEditado ?? contactoDelPerfil ?? CONTACTO_VACIO;
+  /** Si lo escrito ya no es lo de la ficha: es lo unico que hace util "Usar estos datos". */
+  const contactoTocado =
+    contactoEditado !== null &&
+    contactoDelPerfil !== null &&
+    (Object.keys(contactoEditado) as (keyof DatosContacto)[]).some(
+      (campo) => contactoEditado[campo] !== contactoDelPerfil[campo],
+    );
   const inicioElegido =
     disponibilidad?.slots.some((slot) => slot.inicio === inicio) === true ? inicio : '';
 
@@ -497,7 +501,7 @@ export function ReservarPage() {
                 autoComplete="tel"
                 value={contacto.telefono}
                 onChange={(evento) =>
-                  setContacto((datos) => ({ ...datos, telefono: evento.target.value }))
+                  setContactoEditado({ ...contacto, telefono: evento.target.value })
                 }
                 placeholder="8888 8888"
                 className={CAMPO_CLASSES}
@@ -511,7 +515,7 @@ export function ReservarPage() {
                 autoComplete="given-name"
                 value={contacto.nombre}
                 onChange={(evento) =>
-                  setContacto((datos) => ({ ...datos, nombre: evento.target.value }))
+                  setContactoEditado({ ...contacto, nombre: evento.target.value })
                 }
                 className={CAMPO_CLASSES}
               />
@@ -523,7 +527,7 @@ export function ReservarPage() {
                 autoComplete="family-name"
                 value={contacto.apellido}
                 onChange={(evento) =>
-                  setContacto((datos) => ({ ...datos, apellido: evento.target.value }))
+                  setContactoEditado({ ...contacto, apellido: evento.target.value })
                 }
                 className={CAMPO_CLASSES}
               />
@@ -535,7 +539,7 @@ export function ReservarPage() {
                 autoComplete="email"
                 value={contacto.email}
                 onChange={(evento) =>
-                  setContacto((datos) => ({ ...datos, email: evento.target.value }))
+                  setContactoEditado({ ...contacto, email: evento.target.value })
                 }
                 className={CAMPO_CLASSES}
               />
@@ -558,6 +562,10 @@ export function ReservarPage() {
             </label>
           </div>
 
+          {/* Con sesion, los campos de arriba ya vienen con la ficha puesta. Esta tarjeta
+              confirma **con que cuenta** se esta agendando —quien tiene dos numeros lo
+              necesita— y ofrece deshacer solo cuando hay algo que deshacer: un boton
+              "Usar estos datos" junto a unos campos que ya los tienen no hace nada. */}
           {datosGuardados && (
             <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -566,22 +574,16 @@ export function ReservarPage() {
                   {nombreCompleto(datosGuardados)} · {datosGuardados.telefono}
                 </p>
                 <p className="mt-1 text-xs text-text-muted">
-                  Con la sesion abierta, la cita se registra en su cuenta.
+                  {contactoTocado
+                    ? 'Cambio los datos de contacto de esta cita. Su perfil no se modifica.'
+                    : 'Con la sesion abierta, la cita se registra en su cuenta.'}
                 </p>
               </div>
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  setContacto({
-                    telefono: datosGuardados.telefono,
-                    nombre: datosGuardados.nombre,
-                    apellido: datosGuardados.apellido ?? '',
-                    email: datosGuardados.email ?? '',
-                  })
-                }
-              >
-                Usar estos datos
-              </Button>
+              {contactoTocado && (
+                <Button variant="secondary" onClick={() => setContactoEditado(null)}>
+                  Usar estos datos
+                </Button>
+              )}
             </Card>
           )}
 

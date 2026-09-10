@@ -5,6 +5,9 @@ import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { ExcepcionesFilter } from './common/filters/excepciones.filter.js';
 import { SobreInterceptor } from './common/interceptors/sobre.interceptor.js';
+import { AccesoInterceptor } from './common/observabilidad/acceso.interceptor.js';
+import { crearLogger } from './common/observabilidad/logger.estructurado.js';
+import { CABECERA_REQUEST_ID } from './common/observabilidad/request-id.middleware.js';
 
 /**
  * Ningun cuerpo legitimo de esta API se acerca a esto: no se suben archivos, y la peticion
@@ -19,6 +22,10 @@ async function bootstrap() {
   // espacios y orden de claves, y entonces ninguna firma legitima coincide.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
+    // Se pasa aqui y no con `app.useLogger()`: asi los logs del propio arranque —modulos
+    // que se instancian, rutas que se mapean, y sobre todo cualquier error de bootstrap—
+    // ya salen en el formato configurado. Ver 10-observabilidad.md.
+    logger: crearLogger(),
   });
   const logger = new Logger('Bootstrap');
   const esProduccion = process.env.NODE_ENV === 'production';
@@ -51,7 +58,15 @@ async function bootstrap() {
   if (esProduccion && !process.env.CORS_ORIGIN) {
     throw new Error('Falta CORS_ORIGIN en produccion. Ver apiBase/.env.example.');
   }
-  app.enableCors({ origin: corsOrigin, credentials: false });
+  app.enableCors({
+    origin: corsOrigin,
+    credentials: false,
+    // Sin esto el navegador **no** deja leer la cabecera aunque el servidor la mande: en
+    // una peticion de otro origen solo son legibles las seis cabeceras seguras por
+    // defecto. Es lo que permite que el frontend muestre el codigo del fallo y que el
+    // reporte del navegador cite la peticion que lo causo.
+    exposedHeaders: [CABECERA_REQUEST_ID],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -77,7 +92,10 @@ async function bootstrap() {
 
   // El sobre y el filtro son la misma decision vista desde los dos lados. Ver
   // 04-contrato-api.md.
-  app.useGlobalInterceptors(new SobreInterceptor());
+  //
+  // `AccesoInterceptor` va primero, o sea por fuera: mide la peticion completa, envoltura
+  // del sobre incluida, y no un tramo de adentro. Ver 10-observabilidad.md.
+  app.useGlobalInterceptors(new AccesoInterceptor(), new SobreInterceptor());
   app.useGlobalFilters(new ExcepcionesFilter());
 
   /**

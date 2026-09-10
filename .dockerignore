@@ -1,0 +1,20 @@
+# El contexto de build debe traer solo fuentes. Todo lo demas o se regenera dentro
+# de la imagen (node_modules, dist) o no debe entrar nunca (.env, .git).
+**/node_modules
+**/dist
+**/dist-ssr
+**/.git
+**/.gitignore
+**/coverage
+**/.vscode
+**/.idea
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.example
+**/npm-debug.log*
+**/*.log
+docker-compose*.yml
+compose*.yml
+Dockerfile
+.dockerignore

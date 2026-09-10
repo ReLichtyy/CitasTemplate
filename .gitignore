@@ -88,3 +88,7 @@ coverage/
 TODO.md
 NOTES.md
 TEMP.md
+
+# Despliegue VPS (compose.vps.yml)
+.env.vps
+respaldos/

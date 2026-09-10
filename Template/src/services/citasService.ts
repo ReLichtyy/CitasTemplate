@@ -1,4 +1,5 @@
 import { apiClient } from '../api/client';
+import type { Cita, EstadoCita, PaginaCitas, ServicioDeCita } from '../types/cita';
 
 export type SlotDisponible = { inicio: string; fin: string };
 
@@ -33,13 +34,43 @@ export type ReservarPayload = {
   notas?: string;
 };
 
+/**
+ * Cuerpo de `PATCH /citas/:id`. Todo opcional: sirve para reprogramar y para cambiar de
+ * estado. Cualquier campo que mueva el espacio ocupado vuelve a pasar por la misma
+ * verificacion de disponibilidad que una reserva nueva, asi que un 409 aqui es tan
+ * normal como al reservar. Ver `02-reservas-concurrencia.md`.
+ */
+export type ActualizarCitaPayload = {
+  servicioId?: string;
+  empleadoId?: string;
+  inicio?: string;
+  adicionalIds?: string[];
+  /** `EstadoCita.codigo`, no el id: es la llave estable del catalogo. */
+  estadoCodigo?: string;
+  notas?: string;
+};
+
+/**
+ * El comprobante de `POST /citas`.
+ *
+ * **Es mas estrecho que `Cita` a proposito, y no es el mismo cuerpo en los dos casos.**
+ * Con sesion el API devuelve la ficha completa; sin ella devuelve solo esto, porque el
+ * telefono de un invitado puede pertenecer a un cliente ya registrado y contestar con su
+ * ficha convertiria la reserva en una consulta de datos ajenos (`comprobanteDeInvitado`).
+ *
+ * Este tipo es la interseccion de los dos, que es lo unico que quien reserva puede leer
+ * sin preguntarse si habia sesion. Para la ficha entera se pide `GET /citas/:id`, que ya
+ * pasa por el guard de propiedad.
+ */
 export type CitaReservada = {
   id: string;
   inicio: string;
   fin: string;
+  precioServicio: string;
+  costoAdicionales: string;
   costoTotal: string;
-  estado: { codigo: string; nombre: string };
-  servicio: { id: string; nombre: string };
+  estado: EstadoCita;
+  servicio: ServicioDeCita;
   empleado: { id: string; usuario: { nombre: string; apellido: string | null } };
 };
 
@@ -56,26 +87,12 @@ export type CitaPorConfirmar = {
   confirmada: boolean;
 };
 
-/**
- * Lo que devuelve `GET /citas`. La paginacion viaja **dentro** de `data`, no como
- * hermano del sobre `{ success, data, message }`. Ver `apiBase/src/common/04-contrato-api.md`.
- *
- * `total` es el conteo con los mismos filtros que la pagina, no el de la tabla entera:
- * es lo que permite pintar "50 de 214" sin una segunda llamada.
- */
-export type PaginaCitas<T = unknown> = {
-  items: T[];
-  total: number;
-  pagina: number;
-  /** Base cero. */
-  limite: number;
-};
-
 export type FiltroCitas = {
   /** Inclusive, ISO 8601. */
   desde?: string;
   /** Exclusive, ISO 8601. */
   hasta?: string;
+  /** Base cero. */
   pagina?: number;
   /** El API lo topa en 100; si no se manda, usa 50. */
   limite?: number;
@@ -94,9 +111,10 @@ function comoQuery(filtro: FiltroCitas = {}): string {
 
 export const citasService = {
   // Siempre paginada: el API no devuelve la agenda entera ni aunque no se le pida nada.
-  list: (filtro?: FiltroCitas) =>
-    apiClient.get<PaginaCitas>(`/citas${comoQuery(filtro)}`),
-  get: (id: string) => apiClient.get(`/citas/${id}`),
+  // A quien ve cada cita lo decide el servidor por rol (`filtroPorPropiedad`): un CLIENTE
+  // recibe las suyas, un EMPLEADO su agenda, un ADMIN todas. Aqui no se filtra nada.
+  list: (filtro?: FiltroCitas) => apiClient.get<PaginaCitas>(`/citas${comoQuery(filtro)}`),
+  get: (id: string) => apiClient.get<Cita>(`/citas/${id}`),
   // La disponibilidad la calcula el servidor: aqui no se simula ni se adivina.
   disponibilidad: (params: { empleadoId: string; servicioId: string; fecha: string }) =>
     apiClient.get<Disponibilidad>(`/citas/disponibilidad?${new URLSearchParams(params)}`),
@@ -108,8 +126,13 @@ export const citasService = {
    */
   consultarConfirmacion: (token: string) =>
     apiClient.post<CitaPorConfirmar>('/citas/confirmacion/consulta', { token }),
-  confirmar: (token: string) =>
-    apiClient.post<CitaPorConfirmar>('/citas/confirmacion', { token }),
-  update: (id: string, dto: unknown) => apiClient.patch(`/citas/${id}`, dto),
-  cancelar: (id: string) => apiClient.delete(`/citas/${id}`),
+  confirmar: (token: string) => apiClient.post<CitaPorConfirmar>('/citas/confirmacion', { token }),
+  /** Solo ADMIN y EMPLEADO. Un CLIENTE recibe 403 aunque la cita sea suya. */
+  update: (id: string, dto: ActualizarCitaPayload) => apiClient.patch<Cita>(`/citas/${id}`, dto),
+  /**
+   * No borra la fila: pasa la cita a CANCELADA y libera el espacio. Devuelve la cita ya
+   * cancelada, asi que quien la llama puede pintar el resultado sin volver a pedirla.
+   */
+  cancelar: (id: string, motivo?: string) =>
+    apiClient.delete<Cita>(`/citas/${id}`, motivo ? { motivo } : undefined),
 };

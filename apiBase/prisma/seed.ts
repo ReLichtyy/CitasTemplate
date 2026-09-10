@@ -301,6 +301,146 @@ const ADICIONALES = [
 ];
 
 /**
+ * Catalogo de productos de ejemplo.
+ *
+ * **Aqui vive el rubro, y esta bien que viva aqui.** El resto del template no nombra un
+ * tipo de negocio (ver SPEC.md, "Producto generico, sin rubro"): estas filas son datos de
+ * ejemplo, igual que los servicios y las personas, y se borran cuando el negocio carga los
+ * suyos. Antes esto era `Template/src/lib/productosPlaceholder.ts`, que era el unico
+ * archivo del frontend con rubro — un `.tsx` no es donde se cambia de negocio.
+ *
+ * `orden` y no alfabetico: la secuencia importa, cada tipo se apoya en el anterior.
+ */
+const CATEGORIAS_PRODUCTO = [
+  {
+    id: '66666666-6666-4666-8666-000000000001',
+    nombre: 'Limpieza',
+    promesa: 'Retiran el dia sin dejar la piel tirante.',
+    descripcion:
+      'Lo primero y lo que mas se nota: una piel mal limpiada no absorbe nada de lo que venga despues. Formulas suaves, sin sulfatos agresivos, para usar a diario.',
+    orden: 1,
+  },
+  {
+    id: '66666666-6666-4666-8666-000000000002',
+    nombre: 'Hidratacion',
+    promesa: 'Sostienen el agua que la piel ya tiene.',
+    descripcion:
+      'La textura cambia segun la piel y el clima, no segun el precio: gel para pieles mixtas y crema mas rica para las secas. Ambas se usan manana y noche.',
+    orden: 2,
+  },
+  {
+    id: '66666666-6666-4666-8666-000000000003',
+    nombre: 'Tratamiento',
+    promesa: 'Trabajan sobre algo concreto: marcas, textura, brillo.',
+    descripcion:
+      'Los activos van en dosis util y en envase opaco, que es lo que los mantiene estables. Se suman de a uno y se les da semanas, no dias.',
+    orden: 3,
+  },
+  {
+    id: '66666666-6666-4666-8666-000000000004',
+    nombre: 'Proteccion',
+    promesa: 'Es lo que hace que el resto valga la pena.',
+    descripcion:
+      'Sin filtro solar diario, cualquier tratamiento sobre manchas o textura rema contra la corriente. Acabado sin residuo blanco, para que no de pereza usarlo.',
+    orden: 4,
+  },
+];
+
+/** Dos quedan `disponible: false` a proposito: es el caso que la card pinta como agotado. */
+const PRODUCTOS = [
+  {
+    id: '77777777-7777-4777-8777-000000000001',
+    categoriaId: '66666666-6666-4666-8666-000000000001',
+    nombre: 'Gel limpiador suave',
+    descripcion:
+      'Limpia sin sulfatos y respeta la barrera de la piel. Hace poca espuma a proposito: la espuma abundante es tensioactivo de mas, y es lo que deja la cara tirante.',
+    precio: '18.50',
+    presentacion: '150 ml',
+    disponible: true,
+  },
+  {
+    id: '77777777-7777-4777-8777-000000000002',
+    categoriaId: '66666666-6666-4666-8666-000000000001',
+    nombre: 'Agua micelar calmante',
+    descripcion:
+      'Para desmaquillar sin frotar. Con pantenol y sin alcohol, asi que sirve tambien en pieles reactivas y en el contorno de ojos.',
+    precio: '15.00',
+    presentacion: '200 ml',
+    disponible: true,
+  },
+  {
+    id: '77777777-7777-4777-8777-000000000003',
+    categoriaId: '66666666-6666-4666-8666-000000000002',
+    nombre: 'Hidratante en gel ligero',
+    descripcion:
+      'Acido hialuronico y niacinamida en base acuosa. Se absorbe rapido y no deja pelicula, asi que el protector solar se puede aplicar encima sin apelmazar.',
+    precio: '24.00',
+    presentacion: '50 ml',
+    disponible: true,
+  },
+  {
+    id: '77777777-7777-4777-8777-000000000004',
+    categoriaId: '66666666-6666-4666-8666-000000000002',
+    nombre: 'Crema nutritiva de noche',
+    descripcion:
+      'Mas rica que la de dia, con ceramidas y manteca de karite. Para piel seca todo el ano y para piel normal en invierno o con aire acondicionado.',
+    precio: '29.90',
+    presentacion: '50 ml',
+    disponible: true,
+  },
+  {
+    id: '77777777-7777-4777-8777-000000000005',
+    categoriaId: '66666666-6666-4666-8666-000000000003',
+    nombre: 'Serum de vitamina C',
+    descripcion:
+      'Al 10%, en envase opaco con gotero. Empareja el tono y aporta luminosidad; se usa de manana y siempre con protector solar encima.',
+    precio: '34.00',
+    presentacion: '30 ml',
+    disponible: true,
+  },
+  {
+    id: '77777777-7777-4777-8777-000000000006',
+    categoriaId: '66666666-6666-4666-8666-000000000003',
+    nombre: 'Mascarilla de arcilla',
+    descripcion:
+      'Arcilla verde con avena para que no reseque. Una o dos veces por semana en la zona T; se retira antes de que termine de secarse del todo.',
+    precio: '16.50',
+    presentacion: '75 ml',
+    disponible: false,
+  },
+  {
+    id: '77777777-7777-4777-8777-000000000007',
+    categoriaId: '66666666-6666-4666-8666-000000000003',
+    nombre: 'Aceite reparador de puntas',
+    descripcion:
+      'Dos gotas en medios y puntas, con el pelo humedo. Sella la fibra y baja el encrespado sin apelmazar ni apagar el brillo.',
+    precio: '21.00',
+    presentacion: '50 ml',
+    disponible: true,
+  },
+  {
+    id: '77777777-7777-4777-8777-000000000008',
+    categoriaId: '66666666-6666-4666-8666-000000000004',
+    nombre: 'Protector solar SPF 50',
+    descripcion:
+      'Filtro de amplio espectro con acabado invisible, sin residuo blanco. Textura fluida que funciona como ultimo paso de la rutina de manana.',
+    precio: '26.50',
+    presentacion: '50 ml',
+    disponible: true,
+  },
+  {
+    id: '77777777-7777-4777-8777-000000000009',
+    categoriaId: '66666666-6666-4666-8666-000000000004',
+    nombre: 'Balsamo labial reparador',
+    descripcion:
+      'Cera de abeja y escualano para labios partidos. Sin sabor ni perfume, que es lo que invita a relamerse y termina resecando mas.',
+    precio: '9.90',
+    presentacion: '15 ml',
+    disponible: false,
+  },
+];
+
+/**
  * Resenas de ejemplo, todas publicadas: el catalogo publico solo muestra las moderadas y
  * sin eso no se veria ninguna.
  *
@@ -502,6 +642,24 @@ async function main() {
       where: { id: adicional.id },
       create: adicional,
       update: adicional,
+    });
+  }
+
+  for (const categoria of CATEGORIAS_PRODUCTO) {
+    await prisma.categoriaProducto.upsert({
+      where: { id: categoria.id },
+      create: categoria,
+      update: categoria,
+    });
+  }
+
+  for (const producto of PRODUCTOS) {
+    await prisma.producto.upsert({
+      where: { id: producto.id },
+      create: producto,
+      // `activo` no se toca al reescribir: si el negocio despublico un producto de
+      // ejemplo, resembrar no debe devolverlo al catalogo publico.
+      update: producto,
     });
   }
 

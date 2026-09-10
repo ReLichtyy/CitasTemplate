@@ -3,7 +3,7 @@ import { CardCover } from './CardCover';
 import { CardDetailIcon } from './CardDetailIcon';
 import { Disponibilidad } from './Disponibilidad';
 import { formatPrice } from '../../lib/formatPrice';
-import type { Producto } from '../../lib/productosPlaceholder';
+import type { Producto } from '../../types/producto';
 
 type ProductoCardProps = {
   producto: Producto;

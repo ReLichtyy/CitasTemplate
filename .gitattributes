@@ -1,0 +1,8 @@
+# Los scripts y las configuraciones se montan y se ejecutan dentro de contenedores
+# Linux. Un CRLF en un shebang da "exec format error", que no dice nada sobre la causa
+# real, y en un nginx.conf da un error de sintaxis en una linea que se ve bien.
+*.sh            text eol=lf
+*.yml           text eol=lf
+*.conf          text eol=lf
+Dockerfile      text eol=lf
+.dockerignore   text eol=lf

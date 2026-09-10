@@ -4,7 +4,7 @@ import { Dialogo } from './Dialogo';
 import { Disponibilidad } from './Disponibilidad';
 import { Thumbnail } from './Thumbnail';
 import { formatPrice } from '../../lib/formatPrice';
-import type { CategoriaProducto, Producto } from '../../lib/productosPlaceholder';
+import type { CategoriaProducto, Producto } from '../../types/producto';
 
 type ProductoModalProps = {
   /** Nulo cuando no hay nada abierto: el propio producto es el estado del modal. */
@@ -76,10 +76,9 @@ export function ProductoModal({
           </div>
 
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
-            <h2
-              id={tituloId}
-              className="font-heading text-xl font-normal tracking-tight text-text-h sm:text-2xl"
-            >
+            {/* Sin `font-heading font-normal tracking-tight text-text-h`: index.css ya se
+                los aplica a todo h2. Repetirlos aqui era pintar cuatro veces lo mismo. */}
+            <h2 id={tituloId} className="text-xl sm:text-2xl">
               {producto.nombre}
             </h2>
 
@@ -102,11 +101,22 @@ export function ProductoModal({
               </div>
             </dl>
 
-            <p className="text-sm leading-relaxed">{producto.descripcion}</p>
+            {producto.descripcion && (
+              <p className="text-sm leading-relaxed">{producto.descripcion}</p>
+            )}
 
-            <ButtonLink to="/citas/reservar" className="w-full">
-              Agendar Cita
-            </ButtonLink>
+            {/* Un agotado no ofrece agendar: el chip de arriba ya dijo que no hay, y un CTA
+                que lo contradice hace dudar de los dos. Se explica en su lugar, porque un
+                boton deshabilitado sin motivo se lee como una pagina rota. */}
+            {producto.disponible ? (
+              <ButtonLink to="/citas/reservar" className="w-full">
+                Consultar en una cita
+              </ButtonLink>
+            ) : (
+              <p className="m-0 rounded-lg border border-border bg-bg p-3 text-center text-sm text-text-muted">
+                Sin existencias por ahora. Preguntenos en su proxima cita cuando vuelve.
+              </p>
+            )}
           </div>
         </>
       )}

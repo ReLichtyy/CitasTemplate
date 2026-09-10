@@ -7,6 +7,7 @@ import { AuthService } from './auth.service.js';
 import { ActualizarPerfilDto } from './dto/actualizar-perfil.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegistroDto } from './dto/registro.dto.js';
+import { CambiarPasswordDto } from './dto/cambiar-password.dto.js';
 import type { AuthenticatedUser } from './jwt-payload.interface.js';
 
 @Controller('auth')
@@ -38,6 +39,29 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.me(user.userId);
+  }
+
+  /**
+   * Cambio de contrasena. Pide la actual, asi que un token robado no basta para quedarse
+   * con la cuenta.
+   *
+   * Lleva limite por IP aunque **no** sea `@Public()`: es una ruta que cuesta dos bcrypt
+   * por peticion y que se puede repetir adivinando la contrasena actual con una sesion
+   * prestada. La regla del CLAUDE.md habla de rutas abiertas, pero el motivo —barata para
+   * quien la manda, cara para el servidor— aplica igual aqui.
+   *
+   * 204: no devuelve nada. Un token nuevo aqui daria a entender que los viejos dejaron de
+   * valer, y no es cierto. Ver `AuthService.cambiarPassword`.
+   */
+  @UseGuards(LimiteIntentosGuard)
+  @LimiteIntentos({ intentos: 10, ventanaMs: 15 * 60_000 })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post('password')
+  cambiarPassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CambiarPasswordDto,
+  ) {
+    return this.authService.cambiarPassword(user.userId, dto);
   }
 
   @Patch('me')

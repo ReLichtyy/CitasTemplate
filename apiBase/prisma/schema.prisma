@@ -64,25 +64,25 @@ model ConfiguracionNegocio {
 }
 
 model Usuario {
-  id            String   @id @default(uuid())
+  id               String    @id @default(uuid())
   /// Identidad y credencial de login.
-  telefono      String   @unique
-  email         String?
+  telefono         String    @unique
+  email            String?
   /// Hash bcrypt. Nunca se serializa hacia el cliente.
   /// Nulo en las fichas que crea una reserva de invitado: existen para colgar la cita
   /// de un telefono, no para iniciar sesion. El login rechaza a quien no lo tiene.
-  password      String?
-  nombre        String
-  apellido      String?
-  rol           Rol      @default(CLIENTE)
-  activo        Boolean  @default(true)
+  password         String?
+  nombre           String
+  apellido         String?
+  rol              Rol       @default(CLIENTE)
+  activo           Boolean   @default(true)
   /// Opt-in explicito para avisos por WhatsApp. Sin el no sale un solo mensaje: es
   /// politica de WhatsApp y es lo que sostiene la reputacion del numero.
-  aceptaWhatsapp   Boolean  @default(false)
+  aceptaWhatsapp   Boolean   @default(false)
   /// Cuando se dio ese consentimiento. Sin fecha, el opt-in no es demostrable.
   aceptaWhatsappEn DateTime?
-  creadoEn      DateTime @default(now())
-  actualizadoEn DateTime @updatedAt
+  creadoEn         DateTime  @default(now())
+  actualizadoEn    DateTime  @updatedAt
 
   empleado         Empleado?
   citasComoCliente Cita[]    @relation("CitaCliente")
@@ -165,6 +165,53 @@ model ServicioAdicional {
   citas CitaAdicional[]
 }
 
+/// Como se agrupa el catalogo de productos. Es una tabla y no un enum porque el rubro se
+/// expresa como datos: cambiar de negocio es cambiar filas, no migrar el esquema.
+model CategoriaProducto {
+  id          String  @id @default(uuid())
+  nombre      String  @unique
+  /// Para que sirve, en una linea. Responde "por que me serviria" antes del detalle.
+  promesa     String  @db.VarChar(200)
+  descripcion String? @db.Text
+  /// Posicion en el catalogo. El orden lo decide el negocio, no el alfabeto.
+  orden       Int     @default(0)
+  activa      Boolean @default(true)
+
+  productos Producto[]
+}
+
+/// Lo que se vende aparte del servicio.
+///
+/// Los dos indicadores estan separados a proposito, igual que en `EstadoCita`:
+/// `activo` es "esta publicado" y `disponible` es "hay existencias hoy". Con uno solo,
+/// quedarse sin stock obligaba a despublicar —y a perder la ficha— o a mentir.
+model Producto {
+  id           String  @id @default(uuid())
+  categoriaId  String
+  nombre       String
+  descripcion  String? @db.Text
+  precio       Decimal @db.Decimal(10, 2)
+  /// Contenido o formato ("50 ml", "barra de 90 g"). Texto libre: la unidad cambia con
+  /// el rubro y encajarla en un numero mas una unidad no sobrevive al primer negocio
+  /// que venda algo por par o por juego.
+  presentacion String  @db.VarChar(60)
+  imagenUrl    String?
+  /// Publicado en el catalogo publico. Dar de baja es apagar esto, nunca borrar la fila:
+  /// el producto puede estar citado en una ficha vieja.
+  activo       Boolean @default(true)
+  /// Si hay existencias hoy. Booleano y no una cantidad: publicar el numero exacto
+  /// obliga a mantenerlo al dia para que no mienta, y el visitante no lo necesita.
+  disponible   Boolean @default(true)
+
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  categoria CategoriaProducto @relation(fields: [categoriaId], references: [id])
+
+  /// El catalogo publico siempre lee "los activos, agrupados por categoria y en orden".
+  @@index([activo, categoriaId])
+}
+
 /// Catalogo de estados. Los indicadores deciden que se puede hacer con una cita:
 /// esta tabla es configuracion critica, no datos de referencia.
 model EstadoCita {
@@ -219,8 +266,8 @@ model Cita {
   servicioId      String
   estadoId        String
 
-  inicio DateTime
-  fin    DateTime
+  inicio      DateTime
+  fin         DateTime
   /// Espejo de `inicio` mientras el estado bloquea disponibilidad; NULL cuando no.
   /// MySQL admite NULLs repetidos en un indice unico, asi que una cita cancelada
   /// libera el espacio mientras la fila sobrevive. Ver 02-reservas-concurrencia.md.
@@ -236,12 +283,12 @@ model Cita {
   creadaEn          DateTime @default(now())
   actualizadaEn     DateTime @updatedAt
 
-  cliente       Usuario         @relation("CitaCliente", fields: [clienteId], references: [id])
-  registradaPor Usuario         @relation("CitaRegistradaPor", fields: [registradaPorId], references: [id])
-  empleado      Empleado        @relation(fields: [empleadoId], references: [id])
-  servicio      Servicio        @relation(fields: [servicioId], references: [id])
-  estado        EstadoCita      @relation(fields: [estadoId], references: [id])
-  adicionales   CitaAdicional[]
+  cliente           Usuario              @relation("CitaCliente", fields: [clienteId], references: [id])
+  registradaPor     Usuario              @relation("CitaRegistradaPor", fields: [registradaPorId], references: [id])
+  empleado          Empleado             @relation(fields: [empleadoId], references: [id])
+  servicio          Servicio             @relation(fields: [servicioId], references: [id])
+  estado            EstadoCita           @relation(fields: [estadoId], references: [id])
+  adicionales       CitaAdicional[]
   notificaciones    NotificacionSalida[]
   tokenConfirmacion TokenConfirmacion?
 
@@ -340,8 +387,8 @@ model TokenConfirmacion {
 /// veces. La fila es el registro de "esto ya se proceso"; el `@@id` lo garantiza.
 model EventoWebhook {
   /// Id del evento tal cual lo manda el proveedor.
-  id         String   @id
+  id         String            @id
   canal      CanalNotificacion @default(WHATSAPP)
   tipo       String
-  recibidoEn DateTime @default(now())
+  recibidoEn DateTime          @default(now())
 }

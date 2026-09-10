@@ -15,6 +15,7 @@ import { Role } from '../common/enums/role.enum.js';
 import type { ActualizarPerfilDto } from './dto/actualizar-perfil.dto.js';
 import type { LoginDto } from './dto/login.dto.js';
 import type { RegistroDto } from './dto/registro.dto.js';
+import type { CambiarPasswordDto } from './dto/cambiar-password.dto.js';
 import type { JwtPayload } from './jwt-payload.interface.js';
 
 /**
@@ -217,9 +218,64 @@ export class AuthService {
   }
 
   /**
+   * Cambia la propia contrasena, exigiendo la actual.
+   *
+   * Exigirla es lo que separa "me robaron el token" de "me robaron la cuenta": con el
+   * token basta para usar la sesion mientras viva, pero no para quedarse con la cuenta y
+   * dejar fuera al dueno. Ver `03-autorizacion.md`.
+   *
+   * **Lo que esto no hace, a sabiendas:** cerrar las demas sesiones. `JwtStrategy` no
+   * consulta la base, asi que los tokens ya emitidos siguen valiendo hasta que vencen
+   * (`JWT_EXPIRES_IN`, 1 dia). Cambiar la clave porque se sospecha de una sesion ajena
+   * **no** la corta hoy. Cerrarlo pide una lista de revocacion —o un `iat` contra un
+   * `passwordCambiadaEn`—, que es una consulta por peticion; este es el punto donde
+   * entraria.
+   */
+  async cambiarPassword(userId: string, dto: CambiarPasswordDto): Promise<void> {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: userId },
+      select: { id: true, password: true, activo: true, telefono: true },
+    });
+
+    // Se compara siempre, igual que en el login: salir antes por `return` haria que el
+    // caso "ficha sin contrasena" respondiera mediblemente mas rapido.
+    const coincide = await compare(
+      dto.actual,
+      usuario?.password ?? (await this.hashSeñuelo),
+    );
+
+    if (!usuario || !usuario.password || !usuario.activo || !coincide) {
+      // El mismo 401 que el login, y con el mismo texto: quien llega aqui con un token
+      // valido pero sin saber la contrasena no debe poder distinguir por que fallo.
+      throw new UnauthorizedException(MENSAJE_CREDENCIALES);
+    }
+
+    if (dto.nueva === dto.actual) {
+      throw new ConflictException('La contrasena nueva es igual a la actual.');
+    }
+
+    // Una contrasena que contiene el telefono es la que se adivina primero, y el telefono
+    // aqui es publico: es el nombre de usuario. Se rechaza antes de guardarla.
+    if (dto.nueva.includes(normalizarTelefono(usuario.telefono))) {
+      throw new ConflictException('La contrasena no puede contener su telefono.');
+    }
+
+    await this.prisma.usuario.update({
+      where: { id: userId },
+      data: { password: await hash(dto.nueva, BCRYPT_ROUNDS) },
+    });
+    // El hecho, no la credencial: en el log no entra ni la vieja ni la nueva.
+    this.logger.log({ evento: 'password_cambiada', usuarioId: userId });
+  }
+
+  /**
    * El token lleva `sub`, `telefono` y `rol`, y nada mas. La ficha viaja **fuera** del
    * token, en el cuerpo de la respuesta: es para que el navegador sepa que pintar sin
    * decodificar la credencial. La autoridad sigue siendo el token en cada peticion.
+   *
+   * `expiraEn` viaja al lado. No es autorizacion —el servidor revalida la firma y su `exp`
+   * en cada peticion— sino lo que permite al navegador cerrar la sesion **a tiempo** en vez
+   * de descubrir que murio en el primer 401, que suele caer a mitad de un formulario.
    */
   private async sesion(usuario: UsuarioPropio) {
     const payload: JwtPayload = {
@@ -227,8 +283,18 @@ export class AuthService {
       telefono: usuario.telefono,
       rol: usuario.rol as Role,
     };
+    const accessToken = await this.jwtService.signAsync(payload);
+
+    // Se lee del token recien firmado en vez de recalcularlo desde `JWT_EXPIRES_IN`: el
+    // `exp` que vale es el que el servidor va a verificar, y derivarlo aparte deja dos
+    // cuentas que se separan en cuanto alguien cambia la variable de entorno.
+    const { exp } = this.jwtService.decode<{ exp: number }>(accessToken);
+
     return {
-      accessToken: await this.jwtService.signAsync(payload),
+      accessToken,
+      // Segundos desde epoch en el JWT; ISO 8601 aqui, que es como viaja toda fecha en
+      // esta API y lo que el navegador puede pasar a `Date` sin convertir nada.
+      expiraEn: new Date(exp * 1000).toISOString(),
       usuario,
     };
   }

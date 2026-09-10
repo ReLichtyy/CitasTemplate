@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Button } from '../ui/Button';
 import { ButtonLink } from '../ui/ButtonLink';
 import { MarcaNegocio } from '../ui/MarcaNegocio';
+import { PerfilModal, inicialesDe } from '../ui/PerfilModal';
 
 // El borde inferior queda siempre presente (transparente en reposo) para que ganar el
 // acento en hover/activo no mueva el link un pixel hacia arriba.
@@ -24,9 +24,10 @@ export const ENLACES_PUBLICOS: Enlace[] = [
 ];
 
 export function Navbar() {
-  const { isAuthenticated, rol, logout } = useAuth();
+  const { isAuthenticated, rol, usuario, logout } = useAuth();
   const location = useLocation();
   const [menuState, setMenuState] = useState({ open: false, pathname: location.pathname });
+  const [perfilAbierto, setPerfilAbierto] = useState(false);
   const isGestion = rol === 'ADMIN' || rol === 'EMPLEADO';
 
   if (menuState.pathname !== location.pathname) {
@@ -45,27 +46,49 @@ export function Navbar() {
   const enlaces: Enlace[] = [
     ...ENLACES_PUBLICOS,
     ...(isAuthenticated ? [{ to: '/citas', label: 'Citas' }] : []),
-    ...(isAuthenticated ? [{ to: '/auth/perfil', label: 'Mi perfil' }] : []),
+    // "Mi perfil" no esta aqui: vive en `PerfilModal`, detras del boton de cuenta. Un
+    // enlace mas en la barra para lo mismo solo compite con la navegacion del negocio.
     ...(isGestion ? [{ to: '/gestion/servicios', label: 'Gestion' }] : []),
   ];
 
-  const botonSesion = (className = '') =>
-    isAuthenticated ? (
-      <Button
-        variant="secondary"
-        className={className}
+  /**
+   * Con sesion, un boton de cuenta con las iniciales que abre `PerfilModal`; sin ella, el
+   * mismo enlace de entrar de siempre.
+   *
+   * **Cerrar sesion ya no vive aqui**: se movio dentro del modal. Ocupaba sitio permanente
+   * en la barra para algo que se usa una vez por sesion, y estaba pegado a los enlaces de
+   * navegacion — el peor vecino para lo unico que destruye estado.
+   *
+   * `usuario` puede tardar en llegar (`AuthProvider` lo pide al arrancar), asi que hasta
+   * entonces no se pinta el boton: unas iniciales que cambian solas al segundo se leen como
+   * un fallo. El hueco es de un ancho fijo para que la barra no salte al llenarse.
+   */
+  const botonSesion = (className = '') => {
+    if (!isAuthenticated) {
+      return (
+        <ButtonLink to="/auth/login" className={className} onClick={closeMenu}>
+          Iniciar sesion
+        </ButtonLink>
+      );
+    }
+    if (!usuario) {
+      return <span className={`inline-block size-11 ${className}`} aria-hidden="true" />;
+    }
+    return (
+      <button
+        type="button"
         onClick={() => {
-          logout();
           closeMenu();
+          setPerfilAbierto(true);
         }}
+        aria-haspopup="dialog"
+        aria-label={`Cuenta de ${usuario.nombre}`}
+        className={`inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-xs font-semibold text-text-h transition-[background-color,border-color] duration-150 hover:border-accent-border hover:bg-accent-bg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border ${className}`}
       >
-        Cerrar sesion
-      </Button>
-    ) : (
-      <ButtonLink to="/auth/login" className={className} onClick={closeMenu}>
-        Iniciar sesion
-      </ButtonLink>
+        {inicialesDe(usuario)}
+      </button>
     );
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur-md">
@@ -119,9 +142,24 @@ export function Navbar() {
                 {label}
               </NavLink>
             ))}
-            <div className="mt-3 w-full">{botonSesion('w-full')}</div>
+            {/* El circulo de la cuenta no se estira; el enlace de entrar si. */}
+            <div className="mt-3 flex w-full justify-center">
+              {botonSesion(isAuthenticated ? '' : 'w-full')}
+            </div>
           </div>
         </div>
+      )}
+
+      {usuario && (
+        <PerfilModal
+          usuario={usuario}
+          abierto={perfilAbierto}
+          onCerrar={() => setPerfilAbierto(false)}
+          onSalir={() => {
+            setPerfilAbierto(false);
+            logout();
+          }}
+        />
       )}
     </header>
   );
