@@ -1,0 +1,28 @@
+# Superposicion que compila la imagen en esta maquina en vez de bajarla de GHCR.
+#
+# Es un archivo aparte y no un bloque mas de compose.vps.yml a proposito: mientras
+# `build` vivia ahi, cualquier despliegue que corriera `docker compose up --build` —y eso
+# es lo que hace un panel como Dokploy salvo que se le diga lo contrario— compilaba el
+# frontend y el API dentro del VPS, en 2 GB de RAM y mientras el sitio atendia. La imagen
+# se compila en GitHub Actions justamente para que el servidor no haga eso.
+#
+# Cuando SI hace falta:
+#   - VPS sin CI, o antes de que el flujo publique la primera imagen.
+#   - Probar un cambio del Dockerfile sin pasar por un push.
+#
+#   docker compose -f compose.vps.yml -f compose.build.yml --env-file .env.vps up -d --build
+#
+# `scripts/deploy.sh --build` es esta misma linea.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # El frontend pega al API por ruta relativa: mismo origen, sin CORS.
+        VITE_API_URL: /api
+    # El nombre con el que queda la imagen compilada aqui. Es la misma clave que usa el
+    # despliegue normal, asi que `deploy.sh` puede volver atras por id de imagen sin
+    # saber cual de los dos caminos la puso.
+    image: ${IMAGEN:-citas:latest}

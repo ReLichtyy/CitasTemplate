@@ -17,7 +17,10 @@
 # Build:  docker build -t citas:latest .
 # Ver compose.vps.yml y DEPLOY.md.
 
-ARG NODE_IMAGE=node:22-bookworm-slim
+# Misma linea mayor que trae la imagen de WAHA (Node 24 en noweb-2026.8.2, y la capa de
+# verificacion de abajo lo comprueba). Compilar con una mayor y ejecutar con otra es
+# pedir una diferencia de ABI o de resolucion de modulos que no aparece hasta el VPS.
+ARG NODE_IMAGE=node:24-bookworm-slim
 # Misma linea que docker-compose.yml. Fijada a proposito: local y VPS iguales.
 ARG WAHA_IMAGE=devlikeapro/waha:noweb-2026.8.2
 
@@ -111,20 +114,38 @@ RUN set -eux; \
     node -e "if (+process.versions.node.split('.')[0] < 20) { console.error('Node ' + process.versions.node + ' en la imagen de WAHA: el API necesita >= 20'); process.exit(1) }"
 
 # El comando de arranque de WAHA se resuelve UNA vez, aqui, y se congela en un script.
-# Resolverlo en cada arranque seria repetir trabajo; hardcodearlo seria fijar un detalle
-# interno de una imagen de terceros que cambia entre versiones.
-RUN set -eux; \
-    if [ -f /app/dist/main.js ]; then \
-      printf '#!/bin/sh\nset -e\ncd /app\nexec node dist/main.js\n' > /usr/local/bin/waha-run; \
-    elif [ -f /app/dist/main ]; then \
-      printf '#!/bin/sh\nset -e\ncd /app\nexec node dist/main\n' > /usr/local/bin/waha-run; \
-    elif [ -f /app/package.json ] && node -e "process.exit(require('/app/package.json').scripts && require('/app/package.json').scripts.start ? 0 : 1)"; then \
-      printf '#!/bin/sh\nset -e\ncd /app\nexec npm run --silent start\n' > /usr/local/bin/waha-run; \
-    else \
-      echo "No se encontro el punto de entrada de WAHA en /app"; ls -la /app; exit 1; \
-    fi; \
-    chmod +x /usr/local/bin/waha-run; \
-    cat /usr/local/bin/waha-run
+#
+# Lo que se ejecuta es el `/entrypoint.sh` de la propia imagen de WAHA, no `node dist/main`
+# a secas, porque ese script hace dos cosas que WAHA da por hechas:
+#   - Normaliza la clave: lee WHATSAPP_API_KEY (o WAHA_API_KEY), **desexporta las dos** y
+#     deja WAHA_API_KEY con la forma `sha512:<hex>`, que es la unica que el proceso lee.
+#     Saltarselo aqui era arrancar WAHA sin clave —su API entera sin autenticacion dentro
+#     del contenedor— y ademas dejarle a la vista el WAHA_API_KEY en claro que este
+#     contenedor tiene puesto para el API de citas. El desexportado es justamente lo que
+#     evita lo segundo.
+#   - Calcula UV_THREADPOOL_SIZE segun los nucleos de la maquina.
+# El `dist/main` es la caida por si una version futura mueve o quita el entrypoint.
+RUN <<'FIN' /bin/sh
+set -eux
+{
+  echo '#!/bin/sh'
+  echo 'set -e'
+  echo 'cd /app'
+  if [ -f /entrypoint.sh ]; then
+    echo 'exec /bin/sh /entrypoint.sh'
+  elif [ -f /app/dist/main.js ]; then
+    echo 'exec node dist/main.js'
+  elif [ -f /app/dist/main ]; then
+    echo 'exec node dist/main'
+  else
+    echo "No se encontro el punto de entrada de WAHA en /app" >&2
+    ls -la /app >&2
+    exit 1
+  fi
+} > /usr/local/bin/waha-run
+chmod +x /usr/local/bin/waha-run
+cat /usr/local/bin/waha-run
+FIN
 
 # --- API ---------------------------------------------------------------------
 # node_modules ya viene podado a produccion desde la etapa api-build.
@@ -153,10 +174,18 @@ RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
 
 # Valores que describen la topologia DE ESTA IMAGEN y no cambian por despliegue. Lo que
 # si cambia (secretos, dominio, base de datos) va en el .env del compose.
+#
+# HEAP_WAHA_MB y HEAP_API_MB son el techo de heap de cada Node, y los lee
+# docker/supervisord.conf. Sin ellos los dos procesos heredan el
+# NODE_OPTIONS=--max-old-space-size=16384 que trae la imagen de WAHA: con `mem_limit`
+# de por medio, eso no es un limite alto sino un contenedor que muere por OOM antes de
+# que ninguno de los dos se moleste en juntar basura.
 ENV NODE_ENV=production \
     TZ=UTC \
     API_PORT=8080 \
     WAHA_PORT=3000 \
+    HEAP_WAHA_MB=900 \
+    HEAP_API_MB=320 \
     WAHA_URL=http://127.0.0.1:3000 \
     WAHA_SESSION=default \
     WAHA_AUTOSTART=true \

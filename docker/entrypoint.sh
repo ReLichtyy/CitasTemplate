@@ -50,6 +50,27 @@ if [ "${WAHA_AUTOSTART:-true}" != "true" ]; then
   log "WAHA_AUTOSTART=false: los avisos se escriben al log, no salen por WhatsApp"
 elif [ -z "${WAHA_API_KEY:-}" ]; then
   fatal "WAHA esta encendido pero falta WAHA_API_KEY (el texto plano, no el hash)."
+else
+  [ -n "${WAHA_HOOK_HMAC_KEY:-}" ] || \
+    fatal "WAHA esta encendido pero falta WAHA_HOOK_HMAC_KEY: el API rechazaria todos sus webhooks."
+
+  # Las dos mitades de la misma clave tienen que corresponderse: el API manda el texto
+  # plano en X-Api-Key y WAHA compara contra el hash. Puestos de dos variables distintas,
+  # el error de copiar y pegar no da ningun sintoma al arrancar —WAHA levanta, el API
+  # levanta— y aparece mucho despues, como un 401 por cada aviso y una cola que no drena.
+  # Aqui cuesta una comparacion y el contenedor no arranca.
+  if [ -n "${WHATSAPP_API_KEY:-}" ]; then
+    esperado=$(node -e "const c=require('node:crypto');process.stdout.write('sha512:'+c.createHash('sha512').update(process.env.WAHA_API_KEY).digest('hex'))")
+    if [ "$WHATSAPP_API_KEY" != "$esperado" ]; then
+      fatal "WAHA_API_KEY_HASH no es el sha512 de WAHA_API_KEY. Regenerelo con:
+  node -e \"console.log('sha512:'+require('crypto').createHash('sha512').update('LA-CLAVE').digest('hex'))\""
+    fi
+    log "clave de WAHA verificada contra su hash"
+  else
+    # Sin hash, el entrypoint de WAHA hashea el texto plano el solo. Funciona, pero
+    # entonces WAHA_API_KEY_HASH del .env no esta llegando a ningun lado.
+    log "aviso: WAHA_API_KEY_HASH vacia; WAHA va a hashear el texto plano al arrancar"
+  fi
 fi
 
 log "zona horaria: ${TZ:-UTC} · hora local: $(date)"

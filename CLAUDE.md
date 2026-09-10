@@ -91,7 +91,7 @@ No test runner is configured yet in Template.
   que crece con cada reserva. Aqui el precio **si** llega en el cuerpo y se persiste — este
   es el sitio donde el precio se define, y la regla de "el servidor recalcula importes"
   habla justamente de que una reserva no puede traer el suyo.
-- **`HealthController`** (`src/health/health.controller.ts`) exposes `@Public() GET /health`, used by the frontend to detect API availability without a token. It does **not** touch the database yet — it answers `ok` with MariaDB down.
+- **`HealthController`** (`src/health/health.controller.ts`) exposes two `@Public()` probes, and the split is the point. `GET /health` is **liveness**: it answers `ok` while the process can serve a request and deliberately does not touch the database — it is what the image's `HEALTHCHECK` and Traefik interrogate, and a MariaDB hiccup must not pull a healthy container out of rotation. `GET /health/listo` is **readiness**: it runs `SELECT 1` (3 s cap) and returns 503 when the database does not answer — it is what `vigia`, `deploy.sh`, `restaurar.sh` and the external monitor watch. The frontend's availability check uses `/health`.
 - **Observabilidad** (`src/common/observabilidad/` + `src/telemetria/`) — `RequestIdMiddleware` stamps every request with `x-request-id` (validating any inbound one before reusing it), publishes it through an `AsyncLocalStorage` so every `new Logger(...)` in the codebase picks it up with no signature change, and returns it in the response header (exposed via CORS `exposedHeaders`, or the browser could not read it). `LoggerEstructurado` is passed to `NestFactory.create({ logger })` so bootstrap logs already have the format: JSON lines in production, Nest's `ConsoleLogger` outside it. `AccesoInterceptor` writes one `evento: 'peticion'` line per request (method, declared route, status, ms) and `ExcepcionesFilter` writes the `evento: 'excepcion'` line with the reason — **including 4xx now**, which used to leave no trace at all. `POST /telemetria/errores` (`@Public()`, rate-limited, tightly bounded DTO) ingests what only the browser sees. No table and no external APM on purpose: events go to stdout and rotation belongs to the process manager. Full reasoning: `apiBase/src/common/observabilidad/10-observabilidad.md`.
 - CORS is enabled in `main.ts` for `process.env.CORS_ORIGIN` (defaults to the Vite dev origin `http://localhost:5173`) — update this env var, not the code, when the frontend origin changes.
 - `LOG_FORMAT`/`LOG_LEVEL` are read from the real process environment **before** `ConfigModule` loads `.env`, because the logger exists from the first line of bootstrap. On a VPS the process manager sets them; locally `npm run start:prod` loads `.env` with `--env-file-if-exists`.
@@ -165,13 +165,20 @@ No test runner is configured yet in Template.
 - **Local infrastructure is one `docker-compose.yml` at the repo root**, and it holds only the pieces that are not Node: `db` (MariaDB, `127.0.0.1:3306`) and `waha` (WhatsApp HTTP API, published on `127.0.0.1:3001` because it listens on 3000 inside the container and the API already owns 3000 on the host). Both API and frontend run natively via npm — do not containerize them locally. The root `.env` feeds compose (WAHA keys, MariaDB password) and is a different file from `apiBase/.env`; both are gitignored, with `.env.example` beside each. WAHA is scaffolding for `09-conexion-whatsapp.md`: its session is not scanned yet and no code calls it.
 - **El VPS es otra topologia, no la de local: una sola imagen.** `Dockerfile` (raiz)
   arma frontend + API + worker + WAHA en una imagen; `compose.vps.yml` la levanta junto
-  a MariaDB, que es el unico servicio que queda fuera. Adentro, nginx (`docker/nginx.conf`)
+  a MariaDB, que es el unico servicio que queda fuera; ese archivo **no tiene bloque
+  `build`** —solo baja la imagen que publico CI— y compilar en la maquina es superponerle
+  `compose.build.yml`, que es lo que hace `scripts/deploy.sh --build`. Adentro, nginx (`docker/nginx.conf`)
   sirve `Template/dist` y manda `/api/` al API en `127.0.0.1:8080`, supervisor
   (`docker/supervisord.conf`) mantiene vivos los tres procesos, y `docker/entrypoint.sh`
   valida el entorno, migra y siembra antes de que nada escuche. Consecuencias que el
   codigo da por hechas ahi: el frontend sale por el mismo origen que el API (sin CORS),
   WAHA se alcanza en `127.0.0.1:3000` y su webhook vuelve por loopback, y el worker corre
-  dentro del proceso del API. Nada de esto cambia como se trabaja en local, donde API y
+  dentro del proceso del API. WAHA se arranca por su **propio** `/entrypoint.sh`
+  (lo congela `waha-run` en el Dockerfile): ese script es el que convierte
+  `WHATSAPP_API_KEY` en el `WAHA_API_KEY=sha512:...` que el proceso lee, y saltarselo deja
+  su API sin autenticacion dentro del contenedor. Cada Node fija ademas su propio
+  `--max-old-space-size` (`HEAP_WAHA_MB`, `HEAP_API_MB`), porque la imagen de WAHA trae uno
+  de 16 GB que bajo `mem_limit` termina en OOM en vez de en un GC. Nada de esto cambia como se trabaja en local, donde API y
   frontend siguen corriendo con npm. Pasos, secretos y pareo del numero: `DEPLOY.md`.
 - **El despliegue lo dispara un push a `main`, y la imagen se compila en CI.**
   `.github/workflows/despliegue.yml` verifica (lint + pruebas + compilacion de los dos

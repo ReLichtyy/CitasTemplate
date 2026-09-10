@@ -34,9 +34,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Misma mayor que la imagen: el runtime del VPS es el Node que trae WAHA (24), y
+      # verificar con una distinta es verificar otra cosa.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: |
             apiBase/package-lock.json
@@ -83,9 +85,12 @@ jobs:
         run: npm run build
 
   imagen:
-    name: Publicar imagen
+    # En un PR se compila y no se publica. El paso existe porque el `docker build` es la
+    # unica prueba que tiene el Dockerfile: mientras este job se saltaba en los PR, una
+    # capa rota —la de WAHA es de terceros y cambia sola— solo se descubria despues del
+    # merge, en el mismo push que iba a desplegar.
+    name: Compilar imagen (y publicar fuera de un PR)
     needs: verificar
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -102,7 +107,10 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      # Sin publicar no hace falta entrar al registro, y en un PR desde un fork el token
+      # no tiene permiso de escritura de todas formas.
       - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -114,7 +122,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           build-args: |
             VITE_API_URL=/api
           tags: |

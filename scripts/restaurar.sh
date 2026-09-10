@@ -73,9 +73,11 @@ log "levantando la app"
 
 # El arranque migra: si el respaldo es de un esquema viejo, `migrate deploy` lo pone al
 # dia solo, y es justo aca donde hay que enterarse si no puede.
-log "esperando /health"
+# /health/listo, que es la que consulta la base: despues de una restauracion, "el proceso
+# vive" no dice nada — lo que hay que confirmar es que la base restaurada contesta.
+log "esperando /health/listo"
 for _ in $(seq 1 120); do
-  if curl -fsS --max-time 3 "http://127.0.0.1:${PUERTO_PUBLICO:-8080}/health" >/dev/null 2>&1; then
+  if curl -fsS --max-time 3 "http://127.0.0.1:${PUERTO_PUBLICO:-8080}/health/listo" >/dev/null 2>&1; then
     log "restaurado y respondiendo"
     exit 0
   fi

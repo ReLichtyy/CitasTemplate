@@ -4,15 +4,19 @@
 # La base va aparte a proposito: su volumen no debe depender del ciclo de vida de la
 # app, que se reconstruye en cada despliegue.
 #
-# Este archivo sirve para las dos formas de desplegar, y esa es la razon de que tenga
-# `build` e `image` a la vez:
+# Este archivo solo BAJA y LEVANTA imagenes; no compila ninguna. Sirve para las dos
+# formas de desplegar:
 #   - Dokploy (lo normal): importa este compose, Traefik lee las etiquetas de abajo y
 #     pone el dominio y el TLS. Ver DEPLOY.md.
 #   - A mano (emergencia, o VPS sin Dokploy): scripts/deploy.sh, que publica en loopback
 #     y no necesita Traefik.
 #
+# Para compilar en la maquina en vez de bajar la imagen de CI, se superpone
+# compose.build.yml, que es lo unico que trae un bloque `build`:
+#
 #   cp docker/.env.vps.example .env.vps   # y poner valores reales
 #   docker compose -f compose.vps.yml --env-file .env.vps up -d
+#   docker compose -f compose.vps.yml -f compose.build.yml --env-file .env.vps up -d --build
 
 services:
   db:
@@ -40,14 +44,14 @@ services:
     networks: [interna]
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # El frontend pega al API por ruta relativa: mismo origen, sin CORS.
-        VITE_API_URL: /api
-    # Con CI, esta es la imagen que GitHub Actions publica y el VPS solo baja. Sin CI,
-    # es el nombre con el que queda la imagen compilada aqui.
+    # Solo `image`, nunca `build`: este archivo describe lo que el VPS LEVANTA, y el VPS
+    # no compila. La imagen la publica GitHub Actions y aca solo se baja.
+    #
+    # El bloque `build` vive en compose.build.yml, que se superpone a este y que usan
+    # `scripts/deploy.sh --build` y cualquier VPS sin CI. Estaban juntos y eso era una
+    # trampa: Dokploy despliega un Compose con el build habilitado, encuentra `build:` y
+    # se pone a compilar el frontend y el API en el servidor —2 GB, sirviendo al publico—
+    # ignorando por completo la imagen que CI acababa de publicar.
     image: ${IMAGEN:-citas:latest}
     restart: unless-stopped
     depends_on:
@@ -112,14 +116,29 @@ services:
       WAHA_SESSION_CONFIG_IGNORE_BROADCAST: "True"
       WAHA_SESSION_CONFIG_IGNORE_STATUS: "True"
       WAHA_SESSION_CONFIG_IGNORE_CHANNELS: "True"
+      # Este servicio manda avisos y no lee nada de vuelta salvo el acuse. Sin esto, cada
+      # imagen que alguien le responda al numero se descarga a /app/.media, que no esta en
+      # ningun volumen: crece dentro del contenedor hasta el proximo despliegue.
+      WAHA_EVENTS_DOWNLOAD_MEDIA: "false"
       # Poner false deja el resto de la app funcionando con el gateway que escribe al
       # log, sin arrancar WhatsApp.
       WAHA_AUTOSTART: ${WAHA_AUTOSTART:-true}
+
+      # --- Memoria de los dos procesos Node -----------------------------------
+      # Techo de heap de WAHA y del API. Los lee docker/supervisord.conf. Sin ellos los
+      # dos heredan el NODE_OPTIONS=--max-old-space-size=16384 que trae la imagen de WAHA,
+      # y un Node que se cree con 16 GB dentro de un contenedor limitado no junta basura:
+      # lo mata el kernel. Ver `mem_limit` mas abajo.
+      HEAP_WAHA_MB: ${HEAP_WAHA_MB:-900}
+      HEAP_API_MB: ${HEAP_API_MB:-320}
     volumes:
       # Perder este volumen es volver a escanear el QR.
       - waha-sessions:/app/.sessions
     # WAHA con NOWEB reconstruye estado en memoria al recuperar sesiones; el limite evita
-    # que un pico se lleve el VPS entero por delante.
+    # que un pico se lleve el VPS entero por delante. Los dos techos de heap de arriba
+    # (HEAP_WAHA_MB + HEAP_API_MB) tienen que caber aqui con sitio para nginx y para lo
+    # que Node usa fuera del heap: subir mem_limit sin subirlos deja memoria sin usar, y
+    # subirlos sin subir mem_limit cambia un GC por un OOM.
     mem_limit: ${MEM_LIMIT:-1500m}
     logging: *logging
     # dokploy-network es por donde Traefik alcanza este contenedor. `interna` es por
@@ -190,7 +209,10 @@ services:
     depends_on: [app]
     environment:
       TZ: ${TZ:-America/Bogota}
-      VIGIA_URL: http://app/health
+      # /health/listo, no /health: la sonda de vida no toca la base y da verde con
+      # MariaDB caida, que es justo la caida que nadie nota hasta que un cliente no puede
+      # reservar. Ver apiBase/src/health/health.controller.ts.
+      VIGIA_URL: http://app/health/listo
       VIGIA_INTERVALO_S: ${VIGIA_INTERVALO_S:-60}
       VIGIA_UMBRAL: ${VIGIA_UMBRAL:-3}
       ALERTA_WEBHOOK_URL: ${ALERTA_WEBHOOK_URL:-}

@@ -7,7 +7,7 @@
 #   ./scripts/deploy.sh --sin-vuelta-atras   deja el contenedor roto en pie para mirarlo
 #
 # Lo que hace y no se ve: guarda el id de la imagen que estaba corriendo ANTES de tocar
-# nada, y si la nueva no responde /health la vuelve a poner. Un despliegue que falla y
+# nada, y si la nueva no responde /health/listo la vuelve a poner. Un despliegue que falla y
 # deja el sitio caido hasta que alguien lo note es peor que uno que no se hizo.
 set -euo pipefail
 
@@ -15,6 +15,9 @@ cd "$(dirname "$0")/.."
 
 ARCHIVO_ENV=.env.vps
 COMPOSE=(docker compose -f compose.vps.yml --env-file "$ARCHIVO_ENV")
+# Con --build se le superpone compose.build.yml, que es el unico archivo con un bloque
+# `build`. Ver compose.build.yml.
+COMPOSE_BUILD=(docker compose -f compose.vps.yml -f compose.build.yml --env-file "$ARCHIVO_ENV")
 COMPILAR=0
 VUELTA_ATRAS=1
 ESPERA_SALUD=${ESPERA_SALUD:-180}
@@ -52,7 +55,7 @@ if [ -n "$ANTERIOR" ]; then log "imagen actual: ${ANTERIOR:0:19}"; fi
 
 if [ "$COMPILAR" -eq 1 ]; then
   log "compilando la imagen aqui"
-  "${COMPOSE[@]}" build app
+  "${COMPOSE_BUILD[@]}" build app
 else
   log "bajando $IMAGEN"
   "${COMPOSE[@]}" pull app || fatal "No se pudo bajar $IMAGEN. Con --build se compila aqui."
@@ -61,10 +64,13 @@ fi
 log "levantando"
 "${COMPOSE[@]}" up -d --remove-orphans
 
-log "esperando /health (hasta ${ESPERA_SALUD}s)"
+# /health/listo y no /health: la sonda de vida contesta ok con MariaDB caida, y un
+# despliegue que no puede leer la base no es un despliegue bueno, es uno que hay que
+# revertir. Ver apiBase/src/health/health.controller.ts.
+log "esperando /health/listo (hasta ${ESPERA_SALUD}s)"
 sano=0
 for _ in $(seq 1 "$ESPERA_SALUD"); do
-  if curl -fsS --max-time 3 "http://127.0.0.1:${PUERTO_PUBLICO}/health" >/dev/null 2>&1; then
+  if curl -fsS --max-time 3 "http://127.0.0.1:${PUERTO_PUBLICO}/health/listo" >/dev/null 2>&1; then
     sano=1; break
   fi
   sleep 1
@@ -79,7 +85,7 @@ if [ "$sano" -eq 1 ]; then
   exit 0
 fi
 
-log "/health no respondio"
+log "/health/listo no respondio"
 "${COMPOSE[@]}" logs --tail 60 app || true
 
 if [ "$VUELTA_ATRAS" -eq 1 ] && [ -n "$ANTERIOR" ]; then

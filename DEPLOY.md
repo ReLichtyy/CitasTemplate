@@ -10,7 +10,7 @@ VPS (Contabo) · Dokploy
     ├── app        una imagen: nginx + API (worker adentro) + WAHA
     ├── db         MariaDB 11.4, sin puertos, volumen propio
     ├── respaldo   dump diario verificado, con retención
-    └── vigia      sonda /health y avisa cuando deja de responder
+    └── vigia      sonda /health/listo y avisa cuando deja de responder
 
 GitHub Actions:  verificar → publicar imagen en GHCR → avisar a Dokploy
 ```
@@ -49,7 +49,14 @@ Panel → **Create** → **Compose**.
 |---|---|
 | Provider | GitHub → `ReLichtyy/CitasTemplate`, rama `main` |
 | Compose Path | `compose.vps.yml` |
+| Build | **desactivado** — ver abajo |
 | Environment | pegar el contenido de `docker/.env.vps.example` con los valores reales |
+
+`compose.vps.yml` no trae ningún bloque `build`, y eso es deliberado: si el panel
+encuentra uno, compila el frontend y el API **en el VPS** —2 GB de RAM, mientras el sitio
+atiende— e ignora la imagen que CI acaba de publicar. El `build` vive aparte, en
+`compose.build.yml`, que solo se superpone a mano. Si aun así el panel ofrece un
+interruptor de build, dejarlo apagado.
 
 Las etiquetas de Traefik ya están en `compose.vps.yml`: el dominio sale de `DOMINIO` y el
 certificado lo emite el resolver `letsencrypt` de Dokploy. No hace falta configurar
@@ -105,7 +112,8 @@ caída en la primera petición.
 
 ```bash
 docker compose -f compose.vps.yml --env-file .env.vps logs -f app
-curl -fsS https://citas.ejemplo.com/health
+curl -fsS https://citas.ejemplo.com/health        # vive el proceso
+curl -fsS https://citas.ejemplo.com/health/listo  # vive el proceso Y responde la base
 ```
 
 ## 5 · Parear el número de WhatsApp
@@ -134,10 +142,10 @@ Para un VPS sin Dokploy, o cuando el panel no está disponible:
 
 ```bash
 bash scripts/deploy.sh            # baja la imagen que publicó CI y la levanta
-bash scripts/deploy.sh --build    # compila en el VPS (sin CI)
+bash scripts/deploy.sh --build    # compila en el VPS (sin CI); superpone compose.build.yml
 ```
 
-Guarda el id de la imagen que estaba corriendo, espera a `/health` hasta 180 s y, si no
+Guarda el id de la imagen que estaba corriendo, espera a `/health/listo` hasta 180 s y, si no
 responde, **vuelve sola a la versión anterior**. Un despliegue que falla y deja el sitio
 caído hasta que alguien lo note es peor que uno que no se hizo.
 
@@ -179,17 +187,30 @@ rsync -az --delete vps:/ruta/citas/respaldos/ ~/respaldos-citas/
 
 Dos capas, y hacen falta las dos:
 
-1. **Dentro** — el contenedor `vigia` sonda `/health` cada 60 s y avisa a
+1. **Dentro** — el contenedor `vigia` sonda `/health/listo` cada 60 s y avisa a
    `ALERTA_WEBHOOK_URL` tras 3 fallos seguidos, y otra vez cuando vuelve. El umbral existe
    porque un despliegue reinicia el contenedor: avisar al primer fallo sería avisar en
    cada actualización. Sirve cualquier webhook que acepte un POST (Discord, Slack, ntfy,
    Telegram); `ALERTA_FORMATO=texto` manda el mensaje pelado para ntfy.
-2. **Fuera** — un monitor externo apuntando a `https://<dominio>/health`. Es
+2. **Fuera** — un monitor externo apuntando a `https://<dominio>/health/listo`. Es
    imprescindible: el vigía vive en el mismo VPS, así que si el VPS se apaga se apaga con
    él y nadie avisa nada. Un plan gratuito de UptimeRobot o BetterStack alcanza.
 
 Además, el `HEALTHCHECK` de la imagen más `restart: unless-stopped` hacen que un proceso
 muerto se levante solo, y supervisor revive cualquiera de los tres sin tocar a los otros.
+
+### Las dos sondas, y por qué son dos
+
+| Ruta | Qué contesta | Quién la mira |
+|---|---|---|
+| `/health` | vive el proceso. No toca la base | `HEALTHCHECK` de la imagen, Traefik |
+| `/health/listo` | vive el proceso **y** la base responde `SELECT 1` | el vigía, `deploy.sh`, `restaurar.sh`, el monitor externo |
+
+Separadas a propósito. Si el `HEALTHCHECK` consultara la base, un hipo de MariaDB marcaría
+como enfermo un contenedor perfectamente vivo y lo sacaría de rotación en Traefik, cuando
+lo único que hacía falta era esperar. Y al revés: mientras el vigía miraba `/health`, daba
+verde con la base caída, que es exactamente la avería que nadie nota hasta que un cliente
+no puede reservar.
 
 ---
 
@@ -223,6 +244,21 @@ muerto se levante solo, y supervisor revive cualquiera de los tres sin tocar a l
 - **`DOMINIO` va sin esquema** y `APP_URL` con él. Traefik quiere el nombre pelado en la
   regla `Host()`; el API quiere el origen completo. Meter el esquema en la regla la deja
   sin coincidir con nada y el sitio responde 404 de Traefik.
+- **WAHA arranca con su propio `/entrypoint.sh`, no con `node dist/main`.** Ese script es
+  el que normaliza la clave: lee `WHATSAPP_API_KEY`, **desexporta el par de variables** y
+  deja `WAHA_API_KEY=sha512:<hex>`, que es la única forma que el proceso lee. Saltárselo
+  —que es lo que hacía esta imagen— arrancaba WAHA sin clave, o sea con su API entera sin
+  autenticación dentro del contenedor, y de paso le dejaba a la vista el `WAHA_API_KEY` en
+  claro que este contenedor tiene puesto para el API de citas.
+- **El entrypoint verifica que `WAHA_API_KEY_HASH` sea el sha512 de `WAHA_API_KEY`.** Son
+  dos variables distintas del mismo secreto y el error de copiar y pegar no da ningún
+  síntoma al arrancar: aparece después, como un 401 por cada aviso y una cola que no
+  drena. Ahora el contenedor no arranca y dice cuál es.
+- **`HEAP_WAHA_MB` y `HEAP_API_MB`** son el techo de heap de cada proceso Node. La imagen
+  de WAHA trae `NODE_OPTIONS=--max-old-space-size=16384` en su entorno y supervisor se lo
+  pasaría igual al API: un Node que se cree con 16 GB dentro de un contenedor con
+  `mem_limit` no siente presión y no colecciona basura a tiempo — en lugar del GC llega el
+  OOM killer. Los dos techos juntos tienen que caber en `MEM_LIMIT` con sitio para nginx.
 - **Escalar.** Esta imagen es de una instancia: WAHA maneja una sesión y no se replica.
   Si algún día hace falta más de un API, se saca WAHA a su propio servicio y el worker a
   su propio contenedor (`NOTIFICACIONES_WORKER`); el reclamo del outbox ya es atómico
