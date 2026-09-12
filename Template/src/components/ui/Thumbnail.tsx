@@ -35,7 +35,7 @@ export function Thumbnail({ src, fallback, alt = '', className = '' }: Thumbnail
   }
 
   return (
-    <span className={`inline-flex items-center justify-center font-semibold text-accent ${clases}`}>
+    <span className={`inline-flex items-center justify-center font-semibold text-accent-ink ${clases}`}>
       {fallback}
     </span>
   );

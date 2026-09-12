@@ -48,7 +48,7 @@ export function LoginPage() {
       pie={
         <>
           No tiene cuenta?{' '}
-          <Link to="/auth/registro" className="font-medium text-accent">
+          <Link to="/auth/registro" className="font-medium text-accent-ink">
             Crear una
           </Link>
         </>

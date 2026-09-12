@@ -72,7 +72,7 @@ export function RegisterPage() {
       pie={
         <>
           Ya tiene cuenta?{' '}
-          <Link to="/auth/login" className="font-medium text-accent">
+          <Link to="/auth/login" className="font-medium text-accent-ink">
             Iniciar sesion
           </Link>
         </>

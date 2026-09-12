@@ -21,6 +21,17 @@ const TITULAR_NEUTRO = 'Reserva tu cita en minutos';
 const FRASE_CONFIANZA = 'Sabemos lo que hace bueno un servicio.';
 const FRASE_CONFIANZA_BAJADA = 'Por eso cada detalle de tu cita esta pensado para que vuelvas.';
 
+// Datos rapidos bajo el hero: copy de la pagina, no configuracion del negocio (mismo
+// criterio que BAJADA/FRASE_CONFIANZA) — ninguna fila afirma un horario ni un numero de
+// personal que no salga de una fuente real, asi que quedan como promesas de flujo, no
+// como datos.
+const DATOS_RAPIDOS = (terminoEmpleadoPlural: string) =>
+  [
+    { etiqueta: 'Confirmacion', valor: 'Al instante, sin esperar respuesta' },
+    { etiqueta: 'Sin cuenta', valor: 'Reservas con tu telefono' },
+    { etiqueta: terminoEmpleadoPlural, valor: 'Elegis con quien atenderte' },
+  ] as const;
+
 // Describe el flujo real (03-autorizacion.md: se reserva sin sesion, con telefono y
 // nombre), no un generico "es facil" — cada paso es algo que la app efectivamente hace.
 const PASOS_RESERVA = [
@@ -152,7 +163,7 @@ function ComoReservar() {
             {/* El numero monta el borde superior: es lo que hace que la card se lea como
                 un paso numerado y no como una card mas del catalogo. */}
             <span
-              className="font-mono absolute -top-5 inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-accent-border bg-accent-bg text-base font-medium text-accent shadow-xs shadow-black/5"
+              className="font-mono absolute -top-5 inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-accent-border bg-accent-bg text-base font-medium text-accent-ink shadow-xs shadow-black/5"
               aria-hidden="true"
             >
               {paso.numero}
@@ -241,6 +252,19 @@ export function LandingPage() {
             {terminoEmpleadoPlural}
           </ButtonLink>
         </div>
+
+        {/* Tres promesas del flujo, no datos de negocio: por eso ninguna fila lleva un
+            horario ni un numero de personal inventado. */}
+        <dl className="relative mt-10 flex w-full max-w-sm flex-col divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface text-left shadow-xs shadow-black/5 sm:max-w-md">
+          {DATOS_RAPIDOS(terminoEmpleadoPlural).map(({ etiqueta, valor }) => (
+            <div key={etiqueta} className="flex items-center justify-between gap-3 px-4 py-3">
+              <dt className="font-mono text-eyebrow font-medium tracking-eyebrow text-text-muted uppercase">
+                {etiqueta}
+              </dt>
+              <dd className="text-right text-sm text-text-h">{valor}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       <ServiciosMarquee />

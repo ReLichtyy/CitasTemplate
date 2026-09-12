@@ -21,7 +21,9 @@ export function Footer() {
   const { eslogan } = configuracionPlaceholder;
 
   return (
-    <footer className="relative border-t border-border bg-surface">
+    // pb-16 deja sitio a BottomNav (fixed, solo por debajo de md) para que su ultima fila
+    // no quede tapada al llegar al final de la pagina.
+    <footer className="relative border-t border-border bg-surface pb-16 md:pb-0">
       {/* Filo de luz sobre el borde: el pie es el unico corte a todo lo ancho de la app y
           esto lo vuelve un cierre en vez de una linea mas. */}
       <span

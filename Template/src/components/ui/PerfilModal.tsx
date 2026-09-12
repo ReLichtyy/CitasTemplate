@@ -54,12 +54,12 @@ export function PerfilModal({
   const tituloId = useId();
 
   return (
-    <Dialogo open={abierto} onClose={onCerrar} tituloId={tituloId} className="max-w-xs">
-      <div className="flex flex-col gap-4 p-5">
+    <Dialogo open={abierto} onClose={onCerrar} tituloId={tituloId} variant="hoja" className="sm:max-w-xs">
+      <div className="flex flex-col gap-4 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-5">
         <div className="flex items-center gap-3">
           <span
             aria-hidden="true"
-            className="inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-accent-border bg-accent-bg text-sm font-semibold text-accent"
+            className="inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-accent-border bg-accent-bg text-sm font-semibold text-accent-ink"
           >
             {inicialesDe(usuario)}
           </span>

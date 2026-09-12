@@ -12,11 +12,21 @@ type ModalProps = {
 // Modal de contenido: cabecera con titulo y X, cuerpo con scroll y pie con Cerrar. La
 // mecanica del dialogo la pone `Dialogo`; aqui solo vive el cromo. Se cierra con la X, con
 // el boton Cerrar, con Escape y con click en el backdrop.
+//
+// `variant="hoja"`: por debajo de `sm` sube pegada al borde, como el detalle de un
+// servicio o de un especialista en un telefono — el mismo patron que la cuenta y el menu
+// "Mas". De `sm` para arriba es el dialogo centrado de siempre.
 export function Modal({ open, onClose, titulo, children }: ModalProps) {
   const tituloId = useId();
 
   return (
-    <Dialogo open={open} onClose={onClose} tituloId={tituloId} className="max-w-md">
+    <Dialogo
+      open={open}
+      onClose={onClose}
+      tituloId={tituloId}
+      variant="hoja"
+      className="sm:max-w-md"
+    >
       <div className="flex flex-none items-start justify-between gap-3 border-b border-border/70 px-5 py-3.5 sm:px-6 sm:py-4">
         <h2 id={tituloId} className="text-xl font-semibold tracking-tight text-text-h">
           {titulo}

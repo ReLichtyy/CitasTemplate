@@ -122,7 +122,7 @@ export function DetalleCitaPage() {
             <DatoFicha etiqueta="Telefono">
               {/* Enlace tel:: en movil es el numero al que se llama cuando alguien no
                   llega, y es el uso real de este dato en una agenda. */}
-              <a href={`tel:${cita.cliente.telefono}`} className="text-accent">
+              <a href={`tel:${cita.cliente.telefono}`} className="text-accent-ink">
                 {cita.cliente.telefono}
               </a>
             </DatoFicha>

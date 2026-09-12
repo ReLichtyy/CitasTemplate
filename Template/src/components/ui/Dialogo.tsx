@@ -5,8 +5,20 @@ type DialogoProps = {
   onClose: () => void;
   /** Id del elemento que titula el dialogo, para `aria-labelledby`. */
   tituloId: string;
-  /** Ancho y forma los define quien lo usa: `max-w-md`, `max-w-sm`. */
+  /**
+   * Ancho y forma los define quien lo usa. En `centro`, una clase sin prefijo:
+   * `max-w-md`, `max-w-sm`. En `hoja`, con prefijo `sm:` — `sm:max-w-sm` — porque por
+   * debajo de `sm` el ancho es siempre el del telefono y una clase sin prefijo ahi
+   * competiria con esa regla por la misma propiedad.
+   */
   className?: string;
+  /**
+   * `centro` (por defecto): dialogo centrado a cualquier ancho.
+   * `hoja`: por debajo de `sm` sube pegada al borde inferior, a lo ancho del telefono —
+   * como una cuenta o un menu, que en un pulgar se manejan mejor cerca del borde que en el
+   * centro de la pantalla. De `sm` para arriba se comporta como `centro`.
+   */
+  variant?: 'centro' | 'hoja';
   children: ReactNode;
 };
 
@@ -18,7 +30,14 @@ type DialogoProps = {
  * propio modal compacto —otra cabecera, sin pie— y copiar esta parte para reusarla seria
  * copiar la accesibilidad, que es justo lo que no puede tener dos versiones.
  */
-export function Dialogo({ open, onClose, tituloId, className = '', children }: DialogoProps) {
+export function Dialogo({
+  open,
+  onClose,
+  tituloId,
+  className = '',
+  variant = 'centro',
+  children,
+}: DialogoProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -55,7 +74,11 @@ export function Dialogo({ open, onClose, tituloId, className = '', children }: D
           onClose();
         }
       }}
-      className={`m-auto hidden max-h-[85dvh] w-[calc(100%-2rem)] animate-modal-in flex-col overflow-hidden rounded-2xl border border-border bg-surface/95 p-0 text-text shadow-2xl shadow-black/20 backdrop-blur-md open:flex backdrop:bg-black/60 backdrop:backdrop-blur-sm ${className}`}
+      className={`hidden max-h-[85dvh] flex-col overflow-hidden border border-border bg-surface/95 p-0 text-text shadow-2xl shadow-black/20 backdrop-blur-md open:flex backdrop:bg-black/60 backdrop:backdrop-blur-sm ${
+        variant === 'hoja'
+          ? `m-0 mt-auto w-full max-w-none animate-sheet-up rounded-t-2xl rounded-b-none border-b-0 sm:m-auto sm:w-[calc(100%-2rem)] sm:animate-modal-in sm:rounded-2xl sm:border-b ${className}`
+          : `m-auto w-[calc(100%-2rem)] animate-modal-in rounded-2xl ${className}`
+      }`}
     >
       {children}
     </dialog>

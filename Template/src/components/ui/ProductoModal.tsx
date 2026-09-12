@@ -36,7 +36,13 @@ export function ProductoModal({
   const tituloId = useId();
 
   return (
-    <Dialogo open={producto !== null} onClose={onClose} tituloId={tituloId} className="max-w-sm">
+    <Dialogo
+      open={producto !== null}
+      onClose={onClose}
+      tituloId={tituloId}
+      variant="hoja"
+      className="sm:max-w-sm"
+    >
       {producto && (
         <>
           <div className="relative shrink-0">

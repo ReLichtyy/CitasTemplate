@@ -9,9 +9,14 @@
   --color-bg: #f8fafb;
   --color-surface: #ffffff;
   --color-border: #e6eaee;
-  --color-accent: #c2410c;
-  /* Blanco calido, no #ffffff: sobre naranja el blanco puro vibra. */
-  --color-accent-fg: #fff7f2;
+  /* Dorado: el color de superficie del acento — fondos de botón, estado elegido, punto de
+     badge. Nunca como texto: sobre blanco no llega a 4.5:1. Para texto usar --color-accent-ink. */
+  --color-accent: #f2c230;
+  /* Tinta calida oscura, casi negra: sobre dorado puro un texto claro no se lee. */
+  --color-accent-fg: #1a1508;
+  /* Ambar oscuro: el acento cuando es texto (Eyebrow, links, iniciales) y no fondo — el
+     mismo dorado ahi no pasa 4.5:1 sobre blanco. */
+  --color-accent-ink: #8a5b00;
   /* Verde azulado: el precio no puede compartir color con lo que se toca. */
   --color-price: #0f766e;
   --color-danger: #b91c1c;
@@ -57,8 +62,11 @@
   --color-bg: #14161a;
   --color-surface: #1c1f24;
   --color-border: #2e333a;
-  --color-accent: #fb923c;
-  --color-accent-fg: #2a1206;
+  --color-accent: #f2c230;
+  --color-accent-fg: #1a1508;
+  /* Sobre fondo oscuro el dorado ya tiene contraste de sobra como texto: no hace falta
+     oscurecerlo como en claro. */
+  --color-accent-ink: #f2c230;
   --color-price: #2dd4bf;
   --color-danger: #f87171;
   --color-success: #7fbc8f;
@@ -68,6 +76,7 @@
 @theme {
   --animate-fade-up: fade-up 0.5s ease-out both;
   --animate-modal-in: modal-in 0.22s ease-out;
+  --animate-sheet-up: sheet-up 0.22s ease-out;
 }
 
 @keyframes fade-up {
@@ -89,6 +98,19 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+/* Hoja que sube desde el borde inferior, sin el achique de modal-in: una hoja ya esta
+   pegada al borde, achicarla ademas se lee como si se alejara en vez de subir. */
+@keyframes sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

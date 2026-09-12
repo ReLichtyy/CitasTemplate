@@ -1,7 +1,5 @@
-import { useState } from 'react';
-import { Calendar } from './Calendar';
-import { Popover } from './Popover';
-import { formatFecha } from '../../lib/formatFecha';
+import { useMemo } from 'react';
+import { desdeISO, aISO, hoyEnISO } from '../../lib/fechaISO';
 
 /** Una hora que el API dio por libre. `valor` es el instante ISO que se manda al reservar. */
 export type OpcionHora = { valor: string; etiqueta: string };
@@ -23,72 +21,28 @@ type DateTimePickerProps = {
   zonaHoraria?: string | null;
 };
 
-const DISPARADOR_CLASSES =
-  'flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-left text-sm transition-[border-color,background-color,box-shadow] duration-150 hover:border-accent-border hover:bg-accent-bg/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border aria-expanded:border-accent-border aria-expanded:ring-2 aria-expanded:ring-accent-border disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border disabled:hover:bg-surface';
+const ETIQUETA_CLASSES = 'font-mono text-eyebrow font-medium tracking-eyebrow text-text-muted uppercase';
 
-const ETIQUETA_CLASSES = 'text-xs font-medium tracking-wide text-text-muted uppercase';
+// Dos semanas y media: suficiente ventana para elegir sin volverse un calendario entero,
+// y corta como para que la franja no obligue a scrollear de mas en un telefono.
+const DIAS_VISIBLES = 18;
 
-function CalendarIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="size-4 shrink-0 text-text-muted"
-      aria-hidden="true"
-    >
-      <path d="M8 3v3M16 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="size-4 shrink-0 text-text-muted"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7.5V12l3 2" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon({ abierto }: { abierto: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`size-4 shrink-0 text-text-muted transition-transform duration-200 ${
-        abierto ? 'rotate-180' : ''
-      }`}
-      aria-hidden="true"
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
+function agregarDias(iso: string, dias: number): string {
+  const { anio, mes, dia } = desdeISO(iso);
+  const movido = new Date(anio, mes, dia + dias);
+  return aISO(movido.getFullYear(), movido.getMonth(), movido.getDate());
 }
 
 /**
- * Fecha y hora en una sola fila: dos campos que se leen como uno.
+ * Fecha y hora del turno.
  *
- * La hora **no** es un campo libre: las opciones son las que devolvio
- * `GET /citas/disponibilidad` para ese profesional y ese dia. Dejar escribir una hora
- * cualquiera seria inventar disponibilidad del lado del cliente, que es justo lo que
- * ARCHITECTURE.md prohibe — el calendario de cada empleado lo resuelve el servidor.
+ * La fecha es una franja horizontal de dias (no un calendario emergente): quien reserva
+ * elige dentro de una ventana corta, y ver los dias uno al lado del otro deja notar de
+ * entrada cuales caen finde sin tener que abrir nada. La hora **no** es un campo libre: las
+ * opciones son las que devolvio `GET /citas/disponibilidad` para ese profesional y ese dia.
+ * Dejar escribir una hora cualquiera seria inventar disponibilidad del lado del cliente, que
+ * es justo lo que ARCHITECTURE.md prohibe — el calendario de cada empleado lo resuelve el
+ * servidor.
  */
 export function DateTimePicker({
   fecha,
@@ -101,95 +55,89 @@ export function DateTimePicker({
   cargando = false,
   zonaHoraria,
 }: DateTimePickerProps) {
-  const [abiertoFecha, setAbiertoFecha] = useState(false);
-  const [abiertaHora, setAbiertaHora] = useState(false);
+  const base = minFecha || hoyEnISO();
+  const hoy = hoyEnISO();
+
+  const dias = useMemo(() => {
+    const formatoDow = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+    return Array.from({ length: DIAS_VISIBLES }, (_, indice) => {
+      const iso = agregarDias(base, indice);
+      const { anio, mes, dia } = desdeISO(iso);
+      return {
+        iso,
+        dow: formatoDow.format(new Date(anio, mes, dia)),
+        dia,
+        esHoy: iso === hoy,
+      };
+    });
+  }, [base, hoy, locale]);
+
+  const mesVisible = useMemo(() => {
+    const { anio, mes, dia } = desdeISO(fecha || base);
+    return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(
+      new Date(anio, mes, dia),
+    );
+  }, [fecha, base, locale]);
 
   const sinHorarios = !cargando && opciones?.length === 0;
-  const horaElegida = opciones?.find((opcion) => opcion.valor === hora) ?? null;
-
-  const textoHora = cargando
-    ? 'Buscando...'
-    : sinHorarios
-      ? 'Sin horarios'
-      : (horaElegida?.etiqueta ?? 'Elegir hora');
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-      <div className="flex flex-col gap-1.5 sm:w-56">
-        <span className={ETIQUETA_CLASSES}>Fecha</span>
-        <Popover
-          open={abiertoFecha}
-          onOpenChange={setAbiertoFecha}
-          label="Elegir fecha"
-          triggerAriaLabel={fecha ? `Fecha: ${formatFecha(fecha, locale)}` : 'Elegir fecha'}
-          triggerClassName={DISPARADOR_CLASSES}
-          trigger={
-            <>
-              <span className="flex min-w-0 items-center gap-2">
-                <CalendarIcon />
-                <span className="truncate text-text-h">
-                  {fecha ? formatFecha(fecha, locale) : 'Elegir fecha'}
+    <div className="flex flex-col gap-6">
+      <div>
+        <span className={ETIQUETA_CLASSES}>Fecha · {mesVisible}</span>
+        <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+          {dias.map((d) => {
+            const elegido = d.iso === fecha;
+            return (
+              <button
+                key={d.iso}
+                type="button"
+                aria-pressed={elegido}
+                onClick={() => onFechaChange(d.iso)}
+                className={`flex min-h-[68px] w-14 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2.5 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border ${
+                  elegido
+                    ? 'border-accent bg-accent text-accent-fg'
+                    : 'border-border bg-surface text-text hover:border-accent-border hover:bg-accent-bg'
+                }`}
+              >
+                <span
+                  className={`text-[10px] font-medium tracking-wide uppercase ${elegido ? 'text-accent-fg/80' : 'text-text-muted'}`}
+                >
+                  {d.dow}
                 </span>
-              </span>
-              <ChevronDownIcon abierto={abiertoFecha} />
-            </>
-          }
-        >
-          <Calendar
-            value={fecha}
-            min={minFecha}
-            locale={locale}
-            onSelect={(iso) => {
-              onFechaChange(iso);
-              setAbiertoFecha(false);
-            }}
-          />
-        </Popover>
+                <span className="text-lg font-semibold tabular-nums">{d.dia}</span>
+                <span
+                  className={`text-[10px] ${elegido ? 'text-accent-fg/80' : 'text-text-muted'}`}
+                >
+                  {d.esHoy ? 'Hoy' : ' '}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="flex flex-col gap-1.5 sm:w-48">
+      <div>
         <span className={ETIQUETA_CLASSES}>Hora</span>
-        <Popover
-          open={abiertaHora}
-          onOpenChange={setAbiertaHora}
-          disabled={cargando || !opciones || opciones.length === 0}
-          label="Elegir hora"
-          triggerAriaLabel={horaElegida ? `Hora: ${horaElegida.etiqueta}` : 'Elegir hora'}
-          triggerClassName={DISPARADOR_CLASSES}
-          panelClassName="max-h-72 overflow-y-auto"
-          trigger={
-            <>
-              <span className="flex min-w-0 items-center gap-2">
-                <ClockIcon />
-                <span
-                  className={`truncate tabular-nums ${horaElegida ? 'text-text-h' : 'text-text'}`}
-                >
-                  {textoHora}
-                </span>
-              </span>
-              {cargando ? (
-                <span
-                  aria-hidden="true"
-                  className="size-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-accent"
-                />
-              ) : (
-                <ChevronDownIcon abierto={abiertaHora} />
-              )}
-            </>
-          }
-        >
-          <div className="grid w-56 grid-cols-3 gap-1.5">
-            {opciones?.map((opcion) => {
+        {cargando && (
+          <p className="mt-3 flex items-center gap-2 text-sm text-text">
+            <span
+              aria-hidden="true"
+              className="size-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-accent"
+            />
+            Buscando horarios...
+          </p>
+        )}
+        {!cargando && opciones && opciones.length > 0 && (
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+            {opciones.map((opcion) => {
               const elegida = opcion.valor === hora;
               return (
                 <button
                   key={opcion.valor}
                   type="button"
                   aria-pressed={elegida}
-                  onClick={() => {
-                    onHoraChange(opcion.valor);
-                    setAbiertaHora(false);
-                  }}
+                  onClick={() => onHoraChange(opcion.valor)}
                   className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-1 text-sm tabular-nums transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border ${
                     elegida
                       ? 'border-accent bg-accent font-semibold text-accent-fg'
@@ -201,9 +149,12 @@ export function DateTimePicker({
               );
             })}
           </div>
-        </Popover>
+        )}
+        {!cargando && !sinHorarios && opciones === null && (
+          <p className="mt-3 text-sm text-text-muted">Elegi una fecha para ver las horas libres.</p>
+        )}
         {zonaHoraria && !cargando && (
-          <span className="text-xs text-text-muted">Hora de {zonaHoraria}</span>
+          <p className="mt-2 text-xs text-text-muted">Hora de {zonaHoraria}</p>
         )}
       </div>
     </div>

@@ -8,7 +8,7 @@ import type { EstadoCita } from '../../types/cita';
 type Tono = 'acento' | 'exito' | 'peligro' | 'neutro';
 
 const TONO_CLASSES: Record<Tono, string> = {
-  acento: 'border-accent-border text-accent',
+  acento: 'border-accent-border text-accent-ink',
   exito: 'border-success-border text-success',
   peligro: 'border-danger-border text-danger',
   neutro: 'border-border text-text-muted',
