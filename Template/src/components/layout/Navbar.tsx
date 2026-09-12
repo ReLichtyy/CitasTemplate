@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import type { Rol } from '../../services/authService';
 import { ButtonLink } from '../ui/ButtonLink';
 import { MarcaNegocio } from '../ui/MarcaNegocio';
 import { PerfilModal, inicialesDe } from '../ui/PerfilModal';
@@ -22,6 +23,113 @@ export const ENLACES_PUBLICOS: Enlace[] = [
 ];
 
 /**
+ * Accesos directos por dominio, para no obligar a quien gestiona a entrar siempre por
+ * `/gestion/servicios` y navegar desde ahi. Productos queda fuera para EMPLEADO: en el
+ * API hasta la *lectura* de `/productos/gestion` es `Roles(ADMIN)` (ver CLAUDE.md), asi
+ * que un enlace aqui solo le mostraria un 403.
+ */
+function enlacesGestionPara(rol: Rol): Enlace[] {
+  const base: Enlace[] = [
+    { to: '/citas/agenda', label: 'Agenda' },
+    { to: '/gestion/servicios', label: 'Servicios' },
+    { to: '/gestion/empleados', label: 'Empleados' },
+    { to: '/gestion/adicionales', label: 'Adicionales' },
+    { to: '/gestion/horarios', label: 'Horarios' },
+    { to: '/gestion/restricciones', label: 'Restricciones' },
+  ];
+  return rol === 'ADMIN' ? [...base, { to: '/gestion/productos', label: 'Productos' }] : base;
+}
+
+/**
+ * "Gestion" como desplegable y no como un solo link: sin esto, quien administra siempre
+ * entraba por `/gestion/servicios` y navegaba desde ahi a los demas dominios.
+ */
+function MenuGestion({ rol }: { rol: Rol }) {
+  const [abierto, setAbierto] = useState(false);
+  const contenedorRef = useRef<HTMLDivElement>(null);
+  const enlaces = enlacesGestionPara(rol);
+
+  // Clic afuera o Escape cierran el menu: es un desplegable de navegacion, no un dialogo
+  // modal, asi que no bloquea el resto de la pagina mientras esta abierto.
+  useEffect(() => {
+    if (!abierto) {
+      return;
+    }
+    const alHacerClic = (evento: MouseEvent) => {
+      if (!contenedorRef.current?.contains(evento.target as Node)) {
+        setAbierto(false);
+      }
+    };
+    const alTeclear = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') {
+        setAbierto(false);
+      }
+    };
+    document.addEventListener('mousedown', alHacerClic);
+    document.addEventListener('keydown', alTeclear);
+    return () => {
+      document.removeEventListener('mousedown', alHacerClic);
+      document.removeEventListener('keydown', alTeclear);
+    };
+  }, [abierto]);
+
+  return (
+    <div className="relative" ref={contenedorRef}>
+      <button
+        type="button"
+        onClick={() => setAbierto((valor) => !valor)}
+        aria-haspopup="menu"
+        aria-expanded={abierto}
+        className={`inline-flex items-center gap-1.5 border-b-2 pb-0.5 text-sm font-medium transition-colors ${
+          abierto
+            ? 'border-accent text-accent-ink'
+            : 'border-transparent text-text hover:border-accent-border hover:text-text-h'
+        }`}
+      >
+        Gestion
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`size-3.5 shrink-0 transition-transform ${abierto ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+
+      {abierto && (
+        <div
+          role="menu"
+          className="absolute top-full left-1/2 z-50 mt-2 w-56 -translate-x-1/2 rounded-xl border border-border bg-surface p-1.5 shadow-lg shadow-black/10"
+        >
+          {enlaces.map(({ to, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              role="menuitem"
+              onClick={() => setAbierto(false)}
+              className={({ isActive }) =>
+                `flex min-h-10 items-center rounded-lg px-3 text-sm no-underline transition-colors ${
+                  isActive
+                    ? 'bg-accent-bg text-text-h'
+                    : 'text-text hover:bg-accent-bg hover:text-text-h'
+                }`
+              }
+            >
+              {label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Cabecera de la app.
  *
  * De `md` para arriba lleva la navegacion completa, como siempre. Por debajo, `BottomNav`
@@ -32,15 +140,14 @@ export const ENLACES_PUBLICOS: Enlace[] = [
 export function Navbar() {
   const { isAuthenticated, rol, usuario, logout } = useAuth();
   const [perfilAbierto, setPerfilAbierto] = useState(false);
-  const isGestion = rol === 'ADMIN' || rol === 'EMPLEADO';
 
-  // Una sola lista para escritorio: `BottomNav` arma la suya para telefono.
+  // Una sola lista para escritorio: `BottomNav` arma la suya para telefono. "Gestion" no
+  // entra aqui: es un desplegable propio (`MenuGestion`), no un link mas.
   const enlaces: Enlace[] = [
     ...ENLACES_PUBLICOS,
     ...(isAuthenticated ? [{ to: '/citas', label: 'Citas' }] : []),
     // "Mi perfil" no esta aqui: vive en `PerfilModal`, detras del boton de cuenta. Un
     // enlace mas en la barra para lo mismo solo compite con la navegacion del negocio.
-    ...(isGestion ? [{ to: '/gestion/servicios', label: 'Gestion' }] : []),
   ];
 
   /**
@@ -97,6 +204,7 @@ export function Navbar() {
               {label}
             </NavLink>
           ))}
+          {(rol === 'ADMIN' || rol === 'EMPLEADO') && <MenuGestion rol={rol} />}
         </div>
 
         {botonSesion()}

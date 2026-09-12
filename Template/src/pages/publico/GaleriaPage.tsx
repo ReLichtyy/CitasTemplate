@@ -6,19 +6,11 @@ import { SkeletonMediaCardGrid } from '../../components/ui/Skeleton';
 import { Thumbnail } from '../../components/ui/Thumbnail';
 import { useRecursoApi } from '../../hooks/useRecursoApi';
 import { configuracionPlaceholder } from '../../lib/configuracionPlaceholder';
-import { nombreCompleto } from '../../lib/especialista';
+import { construirGaleria } from '../../lib/galeria';
 import { empleadosService } from '../../services/empleadosService';
 import { serviciosService } from '../../services/serviciosService';
 
 const GRID_CLASSES = 'stagger-in grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4';
-
-type ItemGaleria = {
-  id: string;
-  imagenUrl: string;
-  titulo: string;
-  subtitulo: string;
-  to: string;
-};
 
 /**
  * Galeria de fotos reales del negocio: no es un dominio propio (no hay endpoint de
@@ -36,27 +28,12 @@ export function GaleriaPage() {
   // Basta con que falle una: media galeria se lee como la galeria entera.
   const error = servicios.error ?? empleados.error;
 
-  const itemsServicios: ItemGaleria[] = (servicios.datos ?? [])
-    .filter((s) => !!s.imagenUrl)
-    .map((s) => ({
-      id: `servicio-${s.id}`,
-      imagenUrl: s.imagenUrl as string,
-      titulo: s.nombre,
-      subtitulo: terminoServicioPlural,
-      to: '/servicios',
-    }));
-
-  const itemsEquipo: ItemGaleria[] = (empleados.datos ?? [])
-    .filter((e) => !!e.fotoUrl)
-    .map((e) => ({
-      id: `empleado-${e.id}`,
-      imagenUrl: e.fotoUrl as string,
-      titulo: nombreCompleto(e.usuario.nombre, e.usuario.apellido),
-      subtitulo: e.especialidad?.nombre ?? terminoEmpleadoPlural,
-      to: '/equipo',
-    }));
-
-  const items = [...itemsServicios, ...itemsEquipo];
+  const items = construirGaleria(
+    servicios.datos ?? [],
+    empleados.datos ?? [],
+    terminoServicioPlural,
+    terminoEmpleadoPlural,
+  );
 
   return (
     <main className="flex flex-col gap-8 py-6 sm:gap-10 sm:py-10">

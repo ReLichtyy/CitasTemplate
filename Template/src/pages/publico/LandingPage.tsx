@@ -1,12 +1,15 @@
+import { Link } from 'react-router-dom';
 import { ButtonLink } from '../../components/ui/ButtonLink';
-import { CARD_SHELL_CLASSES } from '../../components/ui/Card';
+import { CARD_MEDIA_INTERACTIVE_CLASSES, CARD_SHELL_CLASSES } from '../../components/ui/Card';
 import { Eyebrow } from '../../components/ui/Eyebrow';
 import { SeccionHeader } from '../../components/ui/SeccionHeader';
 import { MarcaNegocio } from '../../components/ui/MarcaNegocio';
 import { Thumbnail } from '../../components/ui/Thumbnail';
 import { useRecursoApi } from '../../hooks/useRecursoApi';
 import { configuracionPlaceholder } from '../../lib/configuracionPlaceholder';
+import { construirGaleria } from '../../lib/galeria';
 import { formatPrice } from '../../lib/formatPrice';
+import { empleadosService } from '../../services/empleadosService';
 import { serviciosService } from '../../services/serviciosService';
 
 // Copy de la pagina, no configuracion del negocio: no existe como campo en
@@ -184,6 +187,67 @@ function ComoReservar() {
 }
 
 /**
+ * Adelanto de la galeria: las mismas fotos reales que `/galeria`, recortadas a las
+ * primeras cuatro. Es un teaser y no una copia — si el catalogo todavia no tiene ninguna
+ * imagen cargada, la seccion no aparece a medias (mismo criterio que `ServiciosMarquee`).
+ */
+function TrabajosDestacados() {
+  const { terminoServicioPlural, terminoEmpleadoPlural } = configuracionPlaceholder;
+  const servicios = useRecursoApi(() => serviciosService.list());
+  const empleados = useRecursoApi(() => empleadosService.list());
+
+  if (servicios.cargando || empleados.cargando || servicios.error || empleados.error) {
+    return null;
+  }
+
+  const items = construirGaleria(
+    servicios.datos ?? [],
+    empleados.datos ?? [],
+    terminoServicioPlural,
+    terminoEmpleadoPlural,
+  ).slice(0, 4);
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="border-t border-border px-4 py-14 sm:py-18">
+      <div className="mx-auto flex max-w-5xl flex-col gap-8 sm:gap-10">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            <Eyebrow tono="acento">Trabajos</Eyebrow>
+            <h2 className="text-2xl text-balance sm:text-3xl">Un vistazo a lo ya hecho</h2>
+          </div>
+          <ButtonLink to="/galeria" variant="secondary">
+            Ver la galeria
+          </ButtonLink>
+        </div>
+
+        <div className="stagger-in grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+          {items.map((item) => (
+            <Link key={item.id} to={item.to} className={`${CARD_MEDIA_INTERACTIVE_CLASSES} block`}>
+              <div className="relative aspect-4/5">
+                <Thumbnail
+                  src={item.imagenUrl}
+                  fallback={item.titulo.charAt(0).toUpperCase()}
+                  className="h-full w-full text-3xl saturate-75 transition-[transform,filter] duration-300 group-hover:scale-105 group-hover:saturate-100"
+                />
+                <div className="foco-imagen pointer-events-none absolute inset-0" />
+                <div className="absolute inset-x-0 bottom-0 p-3">
+                  <p className="line-clamp-1 text-sm font-semibold text-white">{item.titulo}</p>
+                  <p className="line-clamp-1 text-xs text-white/80">{item.subtitulo}</p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
  * Cierre de la pagina: el ultimo bloque no puede ser un boton suelto colgando de la
  * seccion anterior. Es un panel propio —la misma superficie que las cards— para que la
  * landing termine en algo, y no se desvanezca contra el pie.
@@ -270,6 +334,7 @@ export function LandingPage() {
       <ServiciosMarquee />
       <FraseConfianza />
       <ComoReservar />
+      <TrabajosDestacados />
       <CierreCTA />
     </>
   );

@@ -53,6 +53,12 @@ services:
     # se pone a compilar el frontend y el API en el servidor —2 GB, sirviendo al publico—
     # ignorando por completo la imagen que CI acababa de publicar.
     image: ${IMAGEN:-citas:latest}
+    # Sin esto, un `docker compose up -d` que ya tiene una imagen local con el tag
+    # `:latest` no vuelve a bajarla aunque el digest remoto haya cambiado: el redeploy
+    # de Dokploy queda en el aviso del webhook y el contenedor viejo sigue corriendo.
+    # `always` fuerza el pull en cada redeploy, que es lo que este archivo asume en
+    # todos lados (CI compila, el VPS solo baja).
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       db:
