@@ -1,8 +1,10 @@
-# Variables de entorno - credenciales y claves de API
+# Variables de entorno - credenciales y claves de API.
+# `.env.example` NO entra aqui: es la plantilla sin secretos (placeholders como
+# "cambiar-esta-clave") que documenta que variables hacen falta, y tiene que estar en el
+# repo para que `cp .env.example .env` funcione en un clon nuevo. Bloquearla dejaba
+# apiBase/.env.example y Template/.env.example fuera del repositorio.
 .env
 .env.local
-.env.example
-*.env.example
 .env.*.local
 .env.development
 .env.production
