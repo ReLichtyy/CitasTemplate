@@ -26,6 +26,8 @@ waha-sessions/
 *.sqlite
 *.sqlite3
 citas-db-data/
+# ...salvo las migraciones de Prisma: son *.sql y forman parte del codigo, no un dump.
+!apiBase/prisma/migrations/**/*.sql
 
 # Logs y archivos temporales
 logs/
