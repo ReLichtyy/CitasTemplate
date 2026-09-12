@@ -93,12 +93,43 @@ const DIAS_HABILES = [
   'VIERNES',
 ] as const;
 
+/**
+ * Iconos de linea para servicios y productos: SVGs propios (no fotos de banco) que viven
+ * como archivos en `Template/public/ilustraciones/` y se referencian por ruta corta. Un
+ * data URI con el SVG embebido no entra en `imagenUrl` (`VARCHAR(191)`, ver migracion
+ * inicial) para nada mas alla de un icono trivial; un archivo estatico ademas es mismo
+ * origen que el frontend, asi que no depende de un banco de imagenes externo como
+ * picsum.photos ni de CORS.
+ */
+const ilustracion = (archivo: string) => `/ilustraciones/${archivo}.svg`;
+
+/**
+ * Avatar de una persona: DiceBear (ilustrado, por semilla fija) en vez de una foto de
+ * picsum.photos sin relacion con quien es. Cada empleado usa un estilo distinto para que
+ * la rejilla de EquipoPage no repita el mismo trazo con otro pelo.
+ */
+const avatar = (estilo: string, semilla: string, fondo: string) =>
+  `https://api.dicebear.com/9.x/${estilo}/svg?seed=${semilla}&backgroundColor=${fondo}`;
+
 const USUARIOS = [
   {
     id: '11111111-1111-4111-8111-000000000001',
     telefono: '50600000001',
     nombre: 'Admin',
     apellido: 'Del Negocio',
+    rol: 'ADMIN' as const,
+  },
+  /**
+   * Admin real del negocio, no de ejemplo. Sin `password` aqui a proposito, igual que el
+   * resto de USUARIOS: la contrasena la pone `POST /auth/registro` (reclama esta ficha y
+   * conserva el rol), nunca el seed — meter una contrasena real en este archivo la deja en
+   * el historial de git para siempre.
+   */
+  {
+    id: '11111111-1111-4111-8111-000000000007',
+    telefono: '50660255433',
+    nombre: 'Administrador',
+    apellido: null,
     rol: 'ADMIN' as const,
   },
   {
@@ -140,23 +171,25 @@ const USUARIOS = [
 
 /**
  * Varias especialidades y no una sola: con una, la segunda linea de EspecialistaCard dice
- * lo mismo en todas las cards y no se ve si el componente la usa de verdad.
+ * lo mismo en todas las cards y no se ve si el componente la usa de verdad. Nombradas para
+ * el rubro de ejemplo (estetica/spa) que tambien siguen SERVICIOS y PRODUCTOS, para que el
+ * catalogo demo se lea como un solo negocio y no como tres listas sueltas.
  */
 const ESPECIALIDADES = [
   {
     id: '22222222-2222-4222-8222-000000000001',
-    nombre: 'General',
-    descripcion: 'Atiende el catalogo completo.',
+    nombre: 'Estetica integral',
+    descripcion: 'Un poco de todo: rostro, cuerpo y manos, sin especializarse en una sola cosa.',
   },
   {
     id: '22222222-2222-4222-8222-000000000002',
-    nombre: 'Diagnostico',
-    descripcion: 'Primera valoracion y plan de trabajo.',
+    nombre: 'Diagnostico y primera visita',
+    descripcion: 'Valora la piel y arma el plan antes de la primera sesion.',
   },
   {
     id: '22222222-2222-4222-8222-000000000003',
-    nombre: 'Seguimiento',
-    descripcion: 'Acompanamiento en sesiones sucesivas.',
+    nombre: 'Tratamientos faciales',
+    descripcion: 'Sesiones de seguimiento sobre un plan de piel ya definido.',
   },
 ];
 
@@ -165,9 +198,11 @@ const ESPECIALIDADES = [
  * IsUUID, y fijarlos es lo que hace que la semilla sea idempotente y que estos ids se
  * puedan pegar en una prueba manual.
  *
- * Las fotos salen de picsum.photos con una semilla estable, asi que la misma persona
- * conserva su cara entre siembras. Es una dependencia de red: sin internet no cargan y se
- * ve el reemplazo por iniciales, que tambien es un camino que conviene ver.
+ * Las fotos salen de DiceBear (avatar ilustrado por semilla estable), no de una foto de
+ * banco: la misma persona conserva su cara entre siembras y cada quien lleva un estilo
+ * distinto, asi que EquipoPage no se ve como la misma cara repetida con otro pelo. Sigue
+ * siendo una dependencia de red — sin internet no carga y se ve el reemplazo por
+ * iniciales, que tambien es un camino que conviene ver.
  *
  * Erik va sin foto y sin especialidad a proposito. Un catalogo de ejemplo donde todo esta
  * completo esconde justamente los casos que rompen una rejilla.
@@ -177,21 +212,21 @@ const EMPLEADOS = [
     id: '33333333-3333-4333-8333-000000000001',
     usuarioId: '11111111-1111-4111-8111-000000000002',
     especialidadId: '22222222-2222-4222-8222-000000000002',
-    fotoUrl: 'https://picsum.photos/seed/ana-rojas/320/320',
-    bio: 'Doce anios atendiendo primeras visitas. Empieza por escuchar el caso completo antes de proponer un plan, y deja por escrito lo acordado.',
+    fotoUrl: avatar('lorelei', 'ana-rojas', 'c9e4de'),
+    bio: 'Doce anios atendiendo primeras visitas. Empieza por evaluar la piel completa antes de proponer un tratamiento, y deja por escrito lo acordado.',
   },
   {
     id: '33333333-3333-4333-8333-000000000002',
     usuarioId: '11111111-1111-4111-8111-000000000003',
     especialidadId: '22222222-2222-4222-8222-000000000003',
-    fotoUrl: 'https://picsum.photos/seed/bruno-mora/320/320',
-    bio: 'Trabaja sobre todo con clientes que ya vienen en seguimiento. Prefiere sesiones largas y espaciadas antes que muchas sesiones cortas.',
+    fotoUrl: avatar('notionists', 'bruno-mora', 'd9c9e4'),
+    bio: 'Trabaja sobre todo con clientes que ya vienen con un tratamiento en curso. Prefiere sesiones largas y espaciadas antes que muchas sesiones cortas.',
   },
   {
     id: '33333333-3333-4333-8333-000000000003',
     usuarioId: '11111111-1111-4111-8111-000000000005',
     especialidadId: '22222222-2222-4222-8222-000000000001',
-    fotoUrl: 'https://picsum.photos/seed/diana-solis/320/320',
+    fotoUrl: avatar('micah', 'diana-solis', 'cfe3f0'),
     bio: 'Atiende todo el catalogo. Disponible sabados, que es cuando se llena la agenda entre semana.',
   },
   {
@@ -215,12 +250,12 @@ const EMPLEADOS = [
 const SERVICIOS = [
   {
     id: '44444444-4444-4444-8444-000000000001',
-    nombre: 'Consulta inicial',
+    nombre: 'Valoracion facial inicial',
     descripcion:
-      'Primera visita. Se revisa el caso, se aclaran dudas y se sale con un plan de trabajo escrito.',
+      'Primera cita. Se revisa la piel, se aclaran dudas y se sale con una rutina de cuidado escrita.',
     duracionMinutos: 30,
     precio: '25.00',
-    imagenUrl: 'https://picsum.photos/seed/consulta-inicial/640/360',
+    imagenUrl: ilustracion('valoracion-facial-inicial'),
     empleados: [
       '33333333-3333-4333-8333-000000000001',
       '33333333-3333-4333-8333-000000000003',
@@ -229,11 +264,11 @@ const SERVICIOS = [
   },
   {
     id: '44444444-4444-4444-8444-000000000002',
-    nombre: 'Sesion estandar',
-    descripcion: 'Sesion de seguimiento sobre un plan ya definido.',
+    nombre: 'Limpieza facial profunda',
+    descripcion: 'Extraccion, exfoliacion e hidratacion en una sola sesion.',
     duracionMinutos: 60,
     precio: '45.00',
-    imagenUrl: 'https://picsum.photos/seed/sesion-estandar/640/360',
+    imagenUrl: ilustracion('limpieza-facial-profunda'),
     empleados: [
       '33333333-3333-4333-8333-000000000001',
       '33333333-3333-4333-8333-000000000002',
@@ -242,18 +277,18 @@ const SERVICIOS = [
   },
   {
     id: '44444444-4444-4444-8444-000000000003',
-    nombre: 'Sesion extendida',
+    nombre: 'Ritual facial extendido',
     descripcion:
-      'Sesion larga para casos que no entran en una hora. Requiere disponibilidad especial.',
+      'Doble limpieza, masaje facial y mascarilla a medida. Para pieles que necesitan mas tiempo.',
     duracionMinutos: 90,
     precio: '80.00',
-    imagenUrl: 'https://picsum.photos/seed/sesion-extendida/640/360',
+    imagenUrl: ilustracion('ritual-facial-extendido'),
     empleados: ['33333333-3333-4333-8333-000000000002'],
   },
   {
     id: '44444444-4444-4444-8444-000000000004',
-    nombre: 'Revision rapida',
-    descripcion: 'Veinte minutos para resolver un punto puntual, sin abrir el caso completo.',
+    nombre: 'Retoque de cejas',
+    descripcion: 'Diseno y depilacion rapida, sin abrir una rutina completa.',
     duracionMinutos: 20,
     precio: '15.00',
     imagenUrl: null,
@@ -261,17 +296,17 @@ const SERVICIOS = [
   },
   {
     id: '44444444-4444-4444-8444-000000000005',
-    nombre: 'Valoracion a distancia',
+    nombre: 'Valoracion facial a distancia',
     descripcion: 'Misma valoracion inicial, por videollamada. El enlace llega al confirmar.',
     duracionMinutos: 45,
     precio: '30.00',
-    imagenUrl: 'https://picsum.photos/seed/valoracion-distancia/640/360',
+    imagenUrl: ilustracion('valoracion-facial-distancia'),
     empleados: ['33333333-3333-4333-8333-000000000001', '33333333-3333-4333-8333-000000000002'],
   },
   {
     id: '44444444-4444-4444-8444-000000000006',
-    nombre: 'Sesion de cierre',
-    descripcion: 'Ultima sesion del plan: se repasa lo hecho y se entrega el resumen final.',
+    nombre: 'Sesion de mantenimiento',
+    descripcion: 'Revision del progreso del tratamiento y ajuste de la rutina en casa.',
     duracionMinutos: 45,
     precio: '40.00',
     imagenUrl: null,
@@ -346,7 +381,12 @@ const CATEGORIAS_PRODUCTO = [
   },
 ];
 
-/** Dos quedan `disponible: false` a proposito: es el caso que la card pinta como agotado. */
+/**
+ * Dos quedan `disponible: false` a proposito: es el caso que la card pinta como agotado.
+ * `imagenUrl` es una ilustracion propia (ver `ilustracion()` arriba), servida como archivo
+ * estatico del frontend: cada envase (botella, tarro, tubo...) corresponde al tipo de
+ * producto real.
+ */
 const PRODUCTOS = [
   {
     id: '77777777-7777-4777-8777-000000000001',
@@ -356,6 +396,7 @@ const PRODUCTOS = [
       'Limpia sin sulfatos y respeta la barrera de la piel. Hace poca espuma a proposito: la espuma abundante es tensioactivo de mas, y es lo que deja la cara tirante.',
     precio: '18.50',
     presentacion: '150 ml',
+    imagenUrl: ilustracion('gel-limpiador-suave'),
     disponible: true,
   },
   {
@@ -366,6 +407,7 @@ const PRODUCTOS = [
       'Para desmaquillar sin frotar. Con pantenol y sin alcohol, asi que sirve tambien en pieles reactivas y en el contorno de ojos.',
     precio: '15.00',
     presentacion: '200 ml',
+    imagenUrl: ilustracion('agua-micelar-calmante'),
     disponible: true,
   },
   {
@@ -376,6 +418,7 @@ const PRODUCTOS = [
       'Acido hialuronico y niacinamida en base acuosa. Se absorbe rapido y no deja pelicula, asi que el protector solar se puede aplicar encima sin apelmazar.',
     precio: '24.00',
     presentacion: '50 ml',
+    imagenUrl: ilustracion('hidratante-gel-ligero'),
     disponible: true,
   },
   {
@@ -386,6 +429,7 @@ const PRODUCTOS = [
       'Mas rica que la de dia, con ceramidas y manteca de karite. Para piel seca todo el ano y para piel normal en invierno o con aire acondicionado.',
     precio: '29.90',
     presentacion: '50 ml',
+    imagenUrl: ilustracion('crema-nutritiva-noche'),
     disponible: true,
   },
   {
@@ -396,6 +440,7 @@ const PRODUCTOS = [
       'Al 10%, en envase opaco con gotero. Empareja el tono y aporta luminosidad; se usa de manana y siempre con protector solar encima.',
     precio: '34.00',
     presentacion: '30 ml',
+    imagenUrl: ilustracion('serum-vitamina-c'),
     disponible: true,
   },
   {
@@ -406,6 +451,7 @@ const PRODUCTOS = [
       'Arcilla verde con avena para que no reseque. Una o dos veces por semana en la zona T; se retira antes de que termine de secarse del todo.',
     precio: '16.50',
     presentacion: '75 ml',
+    imagenUrl: ilustracion('mascarilla-arcilla'),
     disponible: false,
   },
   {
@@ -416,6 +462,7 @@ const PRODUCTOS = [
       'Dos gotas en medios y puntas, con el pelo humedo. Sella la fibra y baja el encrespado sin apelmazar ni apagar el brillo.',
     precio: '21.00',
     presentacion: '50 ml',
+    imagenUrl: ilustracion('aceite-reparador-puntas'),
     disponible: true,
   },
   {
@@ -426,6 +473,7 @@ const PRODUCTOS = [
       'Filtro de amplio espectro con acabado invisible, sin residuo blanco. Textura fluida que funciona como ultimo paso de la rutina de manana.',
     precio: '26.50',
     presentacion: '50 ml',
+    imagenUrl: ilustracion('protector-solar-spf50'),
     disponible: true,
   },
   {
@@ -436,6 +484,7 @@ const PRODUCTOS = [
       'Cera de abeja y escualano para labios partidos. Sin sabor ni perfume, que es lo que invita a relamerse y termina resecando mas.',
     precio: '9.90',
     presentacion: '15 ml',
+    imagenUrl: ilustracion('balsamo-labial-reparador'),
     disponible: false,
   },
 ];
@@ -572,10 +621,14 @@ async function main() {
   });
 
   for (const especialidad of ESPECIALIDADES) {
+    // Por `id`, no por `nombre`: si el nombre cambia (como aqui, al pasar de generico a
+    // estetica/spa), esto renombra la fila existente. Con `nombre` como llave, un upsert
+    // que no encuentra coincidencia intenta un `create` con el mismo id de siempre y
+    // choca contra la fila vieja que ya esta en la base.
     await prisma.especialidad.upsert({
-      where: { nombre: especialidad.nombre },
+      where: { id: especialidad.id },
       create: especialidad,
-      update: { descripcion: especialidad.descripcion },
+      update: { nombre: especialidad.nombre, descripcion: especialidad.descripcion },
     });
   }
 
