@@ -48,16 +48,23 @@ ENV DATABASE_URL="mysql://build:build@127.0.0.1:3306/build"
 # en src/generated/prisma, y es tsc quien lo lleva a dist/.
 RUN npm run db:generate && npm run build
 
-# El contenedor necesita la CLI de prisma (migrate deploy) y tsx (semilla) al arrancar,
-# y las dos son devDependencies. Se promueven con la version EXACTA que dejo instalada
-# el lockfile, y recien entonces se podan las demas devDependencies. Sin la version
-# exacta, `npm install` podria subir de parche y la imagen dejaria de ser reproducible.
+# El contenedor necesita la CLI de prisma (migrate deploy), tsx (semilla) y dotenv al
+# arrancar, y las tres son devDependencies. Se captura la version EXACTA que dejo el
+# lockfile ANTES de podar -una vez podadas, `require(...)` ya no las encuentra- y se
+# reinstalan con --no-save despues de la poda, sin tocar package.json ni el lock.
+#
+# `npm pkg set dependencies.X=...` seguido de `npm install --omit=dev` NO alcanza: tsx es
+# peer opcional de vite (que llega via vitest, devDependency), y npm deja su entrada en
+# `dev:true` en el lockfile pase lo que pase con "dependencies" del manifest, asi que
+# --omit=dev la poda igual. Verificado con node_modules/.bin/tsx ausente y el contenedor
+# fallando en el arranque con "node_modules/.bin/tsx: not found".
 RUN set -eux; \
-    npm pkg set \
-      dependencies.prisma="$(node -p "require('prisma/package.json').version")" \
-      dependencies.tsx="$(node -p "require('tsx/package.json').version")" \
-      dependencies.dotenv="$(node -p "require('dotenv/package.json').version")"; \
+    PRISMA_V="$(node -p "require('prisma/package.json').version")"; \
+    TSX_V="$(node -p "require('tsx/package.json').version")"; \
+    DOTENV_V="$(node -p "require('dotenv/package.json').version")"; \
     npm install --omit=dev --no-audit --no-fund; \
+    npm install --no-save --no-audit --no-fund \
+      "prisma@$PRISMA_V" "tsx@$TSX_V" "dotenv@$DOTENV_V"; \
     test -f dist/main.js
 
 
