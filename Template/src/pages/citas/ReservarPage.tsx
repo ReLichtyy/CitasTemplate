@@ -50,6 +50,11 @@ type ResultadoHorarios = { clave: string; datos?: Disponibilidad; error?: string
 const OPCION_CLASSES = `${CARD_SHELL_CLASSES} group relative w-full p-4 text-left transition-[border-color,box-shadow,transform,background-color] duration-200 hover:-translate-y-0.5 hover:border-accent-border hover:shadow-lg hover:shadow-black/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border`;
 const OPCION_ELEGIDA_CLASSES = 'border-accent-border bg-accent-bg shadow-xs';
 
+// El asistente muestra un paso a la vez; estos dos valores son los que arma el
+// indicador de progreso y no cambian salvo que se agregue o quite un paso entero.
+const TOTAL_PASOS = 4;
+const PASOS_NUMEROS = Array.from({ length: TOTAL_PASOS }, (_, indice) => indice + 1);
+
 function IconoCheck({ className = '' }: { className?: string }) {
   return (
     <svg
@@ -163,6 +168,14 @@ export function ReservarPage() {
   const [enviando, setEnviando] = useState(false);
   const [errorReserva, setErrorReserva] = useState<string | null>(null);
   const [reserva, setReserva] = useState<CitaReservada | null>(null);
+
+  // Que paso se ve. Es puramente de estructura visual: no decide que se puede
+  // reservar, solo cual seccion esta a la vista. Retroceder no borra lo elegido.
+  const [paso, setPaso] = useState(1);
+  const irAPaso = (destino: number) => {
+    setPaso(destino);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const empleado = useMemo(
     () => empleados?.find((opcion) => opcion.id === empleadoId) ?? null,
@@ -358,54 +371,76 @@ export function ReservarPage() {
   }
 
   return (
-    <main className="flex flex-col gap-10">
+    <main className="flex flex-col gap-8">
       <PageHeader title="Reservar cita" />
 
       {errorCatalogo && (
         <EmptyState title="No se pudo cargar el catalogo" description={errorCatalogo} />
       )}
 
-      <Paso
-        numero={1}
-        titulo="Elija al profesional"
-        resumen={empleado ? nombreCompleto(empleado.usuario) : null}
-      >
-        {!empleados && !errorCatalogo && <Spinner />}
-        {empleados?.length === 0 && <EmptyState title="Todavia no hay profesionales publicados" />}
-        <div className="grid gap-3 stagger-in sm:grid-cols-2 lg:grid-cols-3">
-          {empleados?.map((opcion) => {
-            const elegido = opcion.id === empleadoId;
-            return (
-              <button
-                key={opcion.id}
-                type="button"
-                onClick={() => elegirEmpleado(opcion)}
-                aria-pressed={elegido}
-                className={`${OPCION_CLASSES} ${elegido ? OPCION_ELEGIDA_CLASSES : ''}`}
-              >
-                <span className="flex items-start gap-3">
-                  <Thumbnail
-                    src={opcion.fotoUrl}
-                    fallback={iniciales(opcion.usuario.nombre, opcion.usuario.apellido)}
-                    className="size-12 rounded-full text-sm"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-text-h">
-                      {nombreCompleto(opcion.usuario)}
-                    </span>
-                    <span className="mt-0.5 block truncate text-sm text-text-muted">
-                      {opcion.especialidad?.nombre ?? `${opcion.servicios.length} servicios`}
-                    </span>
-                  </span>
-                  <Marca elegida={elegido} />
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </Paso>
+      {/* Progreso del asistente: un solo paso visible a la vez, este es el unico rastro de
+          los que ya se resolvieron y de cuanto falta. Puramente visual, no decide nada. */}
+      <div className="flex items-center gap-2" aria-label={`Paso ${paso} de ${TOTAL_PASOS}`}>
+        {PASOS_NUMEROS.map((numero) => (
+          <span
+            key={numero}
+            aria-hidden="true"
+            className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
+              numero <= paso ? 'bg-accent' : 'bg-border'
+            }`}
+          />
+        ))}
+      </div>
 
-      {empleado && (
+      {paso === 1 && (
+        <Paso
+          numero={1}
+          titulo="Elija al profesional"
+          resumen={empleado ? nombreCompleto(empleado.usuario) : null}
+        >
+          {!empleados && !errorCatalogo && <Spinner />}
+          {empleados?.length === 0 && <EmptyState title="Todavia no hay profesionales publicados" />}
+          <div className="grid gap-3 stagger-in sm:grid-cols-2 lg:grid-cols-3">
+            {empleados?.map((opcion) => {
+              const elegido = opcion.id === empleadoId;
+              return (
+                <button
+                  key={opcion.id}
+                  type="button"
+                  onClick={() => elegirEmpleado(opcion)}
+                  aria-pressed={elegido}
+                  className={`${OPCION_CLASSES} ${elegido ? OPCION_ELEGIDA_CLASSES : ''}`}
+                >
+                  <span className="flex items-start gap-3">
+                    <Thumbnail
+                      src={opcion.fotoUrl}
+                      fallback={iniciales(opcion.usuario.nombre, opcion.usuario.apellido)}
+                      className="size-12 rounded-full text-sm"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-text-h">
+                        {nombreCompleto(opcion.usuario)}
+                      </span>
+                      <span className="mt-0.5 block truncate text-sm text-text-muted">
+                        {opcion.especialidad?.nombre ?? `${opcion.servicios.length} servicios`}
+                      </span>
+                    </span>
+                    <Marca elegida={elegido} />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+            <Button onClick={() => irAPaso(2)} disabled={!empleado}>
+              Continuar
+            </Button>
+          </div>
+        </Paso>
+      )}
+
+      {paso === 2 && empleado && (
         <Paso numero={2} titulo="Elija el servicio" resumen={servicio?.nombre ?? null}>
           {empleado.servicios.length === 0 ? (
             <EmptyState
@@ -446,10 +481,19 @@ export function ReservarPage() {
               })}
             </div>
           )}
+
+          <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
+            <Button variant="secondary" onClick={() => irAPaso(1)}>
+              Atrás
+            </Button>
+            <Button onClick={() => irAPaso(3)} disabled={!servicio}>
+              Continuar
+            </Button>
+          </div>
         </Paso>
       )}
 
-      {empleado && servicio && (
+      {paso === 3 && empleado && servicio && (
         <Paso
           numero={3}
           titulo="Elija fecha y hora"
@@ -482,10 +526,19 @@ export function ReservarPage() {
               description="Pruebe con otra fecha o con otro profesional."
             />
           )}
+
+          <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
+            <Button variant="secondary" onClick={() => irAPaso(2)}>
+              Atrás
+            </Button>
+            <Button onClick={() => irAPaso(4)} disabled={!inicioElegido}>
+              Continuar
+            </Button>
+          </div>
         </Paso>
       )}
 
-      {empleado && servicio && inicioElegido && (
+      {paso === 4 && empleado && servicio && inicioElegido && (
         <Paso numero={4} titulo="Sus datos">
           <p className="text-sm text-text">
             No hace falta tener cuenta. Con el telefono basta para agendar y para que el
@@ -628,7 +681,10 @@ export function ReservarPage() {
           {/* El texto sale del API, no de una cadena inventada aqui. */}
           {errorReserva && <Alert>{errorReserva}</Alert>}
 
-          <div>
+          <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
+            <Button variant="secondary" onClick={() => irAPaso(3)} disabled={enviando}>
+              Atrás
+            </Button>
             <Button onClick={confirmar} disabled={!puedeConfirmar || enviando}>
               {enviando ? 'Reservando...' : 'Confirmar reserva'}
             </Button>
