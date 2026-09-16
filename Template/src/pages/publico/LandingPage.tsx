@@ -66,53 +66,59 @@ function ServiciosMarquee() {
       {/* Visible, sin aria-hidden: solo la pista que sigue (la repeticion decorativa del
           catalogo) se le oculta al lector de pantalla, no la seccion entera. */}
       <Eyebrow className="mb-6 text-center">Nuestro catalogo</Eyebrow>
+      {/* La mascara vive en este contenedor quieto, no en la pista que se mueve: aplicar
+          mask-image sobre el mismo elemento que anima su transform hace que Safari de iOS
+          no recomponga la mascara en cada frame y la animacion se vea congelada en el
+          celular. Separado asi, ademas el fade queda fijo en los bordes de la seccion en
+          vez de viajar junto con las cards. */}
       <div
         aria-hidden="true"
-        className="marquee-track flex w-max gap-5"
         style={{ maskImage: MASCARA_MARQUEE, WebkitMaskImage: MASCARA_MARQUEE }}
       >
-        {pista.map((servicio, i) => {
-          const tieneImagen = Boolean(servicio.imagenUrl);
-          return (
-            <div
-              key={`${servicio.id}-${i}`}
-              className="relative h-44 w-64 shrink-0 overflow-hidden rounded-2xl border border-border shadow-xs shadow-black/5 sm:h-52 sm:w-72"
-            >
-              <Thumbnail
-                src={servicio.imagenUrl}
-                fallback={servicio.nombre.charAt(0).toUpperCase()}
-                className="h-full w-full text-5xl"
-              />
-              {/* Mismo foco que las cards del catalogo (`foco-imagen` en index.css), y solo
-                  con foto real: sobre el fallback —monograma claro— el oscurecido se lee
-                  como error de carga, no como foco. */}
-              {tieneImagen && <div className="foco-imagen absolute inset-0" />}
-              {/* Dato real de la ficha, no adorno: la duracion es lo segundo que se
-                  pregunta despues del precio, y la card ya la tenia a mano. */}
-              <span
-                className={`font-mono absolute top-3 left-3 rounded-full px-2 py-1 text-eyebrow tracking-eyebrow uppercase ${
-                  tieneImagen ? 'bg-black/45 text-white' : 'border border-border bg-bg/85 text-text-muted'
-                }`}
-              >
-                {servicio.duracionMinutos} min
-              </span>
+        <div className="marquee-track flex w-max gap-5">
+          {pista.map((servicio, i) => {
+            const tieneImagen = Boolean(servicio.imagenUrl);
+            return (
               <div
-                className={`absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 ${tieneImagen ? '' : 'bg-bg/85'}`}
+                key={`${servicio.id}-${i}`}
+                className="relative h-44 w-64 shrink-0 overflow-hidden rounded-2xl border border-border shadow-xs shadow-black/5 sm:h-52 sm:w-72"
               >
+                <Thumbnail
+                  src={servicio.imagenUrl}
+                  fallback={servicio.nombre.charAt(0).toUpperCase()}
+                  className="h-full w-full text-5xl"
+                />
+                {/* Mismo foco que las cards del catalogo (`foco-imagen` en index.css), y solo
+                    con foto real: sobre el fallback —monograma claro— el oscurecido se lee
+                    como error de carga, no como foco. */}
+                {tieneImagen && <div className="foco-imagen absolute inset-0" />}
+                {/* Dato real de la ficha, no adorno: la duracion es lo segundo que se
+                    pregunta despues del precio, y la card ya la tenia a mano. */}
                 <span
-                  className={`text-base font-semibold ${tieneImagen ? 'text-white' : 'text-text-h'}`}
+                  className={`font-mono absolute top-3 left-3 rounded-full px-2 py-1 text-eyebrow tracking-eyebrow uppercase ${
+                    tieneImagen ? 'bg-black/45 text-white' : 'border border-border bg-bg/85 text-text-muted'
+                  }`}
                 >
-                  {servicio.nombre}
+                  {servicio.duracionMinutos} min
                 </span>
-                <span
-                  className={`shrink-0 text-sm font-bold tabular-nums ${tieneImagen ? 'text-white/90' : 'text-price'}`}
+                <div
+                  className={`absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 ${tieneImagen ? '' : 'bg-bg/85'}`}
                 >
-                  {formatPrice(servicio.precio, moneda, locale)}
-                </span>
+                  <span
+                    className={`text-base font-semibold ${tieneImagen ? 'text-white' : 'text-text-h'}`}
+                  >
+                    {servicio.nombre}
+                  </span>
+                  <span
+                    className={`shrink-0 text-sm font-bold tabular-nums ${tieneImagen ? 'text-white/90' : 'text-price'}`}
+                  >
+                    {formatPrice(servicio.precio, moneda, locale)}
+                  </span>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </section>
   );

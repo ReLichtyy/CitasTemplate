@@ -149,6 +149,7 @@
    que el salto no se nota. Se pausa en hover para quien la quiera leer. */
 @utility marquee-track {
   animation: marquee-right 32s linear infinite;
+  will-change: transform;
   &:hover {
     animation-play-state: paused;
   }
