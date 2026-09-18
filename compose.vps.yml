@@ -92,6 +92,12 @@ services:
       EXTERNAL_API_TIMEOUT_MS: ${EXTERNAL_API_TIMEOUT_MS:-10000}
       EXTERNAL_API_SYNC_CRON: ${EXTERNAL_API_SYNC_CRON:-*/15 * * * *}
 
+      # Imagenes del catalogo (uploads del API). La ruta es la del API dentro de la
+      # imagen — su cwd es /srv/citas/api, ver docker/supervisord.conf — y no /app,
+      # que es el territorio de WAHA. Sin el volumen de abajo, cada despliegue
+      # reconstruye el contenedor y las fotos de produccion se pierden con la capa.
+      ARCHIVOS_DIR: /srv/citas/api/uploads
+
       # --- Lado del API que habla con WAHA -----------------------------------
       # Loopback: WAHA corre en este mismo contenedor. Ni red de Docker ni DNS de por
       # medio, que es la razon de que esten juntos.
@@ -140,6 +146,9 @@ services:
     volumes:
       # Perder este volumen es volver a escanear el QR.
       - waha-sessions:/app/.sessions
+      # Las fotos del catalogo sobreviven a los despliegues: la imagen se rehace en
+      # cada uno y sin esto la capa del contenedor se lleva las imagenes por delante.
+      - citas-archivos:/srv/citas/api/uploads
     # WAHA con NOWEB reconstruye estado en memoria al recuperar sesiones; el limite evita
     # que un pico se lleve el VPS entero por delante. Los dos techos de heap de arriba
     # (HEAP_WAHA_MB + HEAP_API_MB) tienen que caber aqui con sitio para nginx y para lo
@@ -233,6 +242,7 @@ services:
 volumes:
   citas-db-data:
   waha-sessions:
+  citas-archivos:
 
 networks:
   interna:

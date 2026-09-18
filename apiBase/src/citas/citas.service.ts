@@ -60,6 +60,7 @@ const USUARIO_PUBLICO = {
 const CLIENTE_AVISO = {
   id: true,
   nombre: true,
+  apellido: true,
   telefono: true,
   aceptaWhatsapp: true,
 } satisfies Prisma.UsuarioSelect;
@@ -123,6 +124,9 @@ export class CitasService {
     const where: Prisma.CitaWhereInput = {
       ...(await this.filtroPorPropiedad(user)),
       ...this.rangoDeFechas(query),
+      // El filtro de profesional de la agenda. Se combina con la propiedad por AND: un
+      // EMPLEADO que lo mande solo estrecha todavia mas su propia agenda.
+      ...(query.empleadoId ? { empleadoId: query.empleadoId } : {}),
     };
 
     // Las dos consultas comparten `where` a proposito: un total que no case con la
@@ -728,11 +732,12 @@ export class CitasService {
    * De quien es la cita. Con sesion sale del token; sin ella, del telefono, que es
    * la identidad del cliente en este producto (SPEC.md).
    *
-   * Un invitado cuyo telefono ya existe cuelga la cita de esa ficha, pero **no** la
-   * reescribe: nadie puede cambiarle el nombre o el correo a un cliente registrado
-   * escribiendo su numero. Queda en pie que reservar a nombre de un telefono ajeno es
-   * posible; sin verificacion del numero no hay forma de impedirlo, y lo que si se
-   * impide es que la respuesta revele algo de la ficha — ver `comprobanteDeInvitado`.
+   * Un invitado cuyo telefono ya existe cuelga la cita de esa ficha y la reescribe
+   * con el nombre y apellido que acaba de escribir: el aviso lleva el nombre de
+   * esta reserva, no el de una ficha vieja. El opt-in y el correo no se tocan aqui
+   * — reservar con el telefono de otra persona no puede darle consentimiento en su
+   * nombre. Lo que si se sigue impidiendo es que la respuesta revele algo de la
+   * ficha — ver `comprobanteDeInvitado`.
    */
   private async resolverCliente(
     tx: Prisma.TransactionClient,
@@ -770,7 +775,18 @@ export class CitasService {
           'Ese telefono no puede reservar; comuniquese con el negocio.',
         );
       }
-      return existente;
+      // El nombre del aviso es el que el cliente acaba de escribir, no el de una
+      // ficha vieja. Solo se actualizan nombre y apellido; el opt-in y el correo
+      // no se tocan: reservar con el telefono de otra persona no puede darle
+      // consentimiento ni cambiarle el correo en su nombre.
+      return tx.usuario.update({
+        where: { telefono },
+        data: {
+          nombre: dto.cliente.nombre.trim(),
+          apellido: dto.cliente.apellido?.trim(),
+        },
+        select: CLIENTE_AVISO,
+      });
     }
 
     // Ficha sin contrasena: existe para colgar la cita de un telefono, no para

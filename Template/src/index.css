@@ -41,6 +41,15 @@
   --color-success-bg: color-mix(in oklab, var(--color-success) 12%, transparent);
   --color-success-border: color-mix(in oklab, var(--color-success) 42%, transparent);
 
+  /* Gestion: los tonos caldos de la seccion administrativa. El acento y el precio ya son
+     los del tema; estos cuatro son el fondo crema de las pestañas activas, el monograma
+     de cada fila y su inicial. Van como tokens y no como hex en los componentes: cambiar
+     de paleta es editar aqui. */
+  --color-crema: #fbf7ee;
+  --color-crema-suave: #faf5e9;
+  --color-crema-borde: #e6ded0;
+  --color-crema-ink: #a38b6d;
+
   /* Ledger: EB Garamond para display (titulos, precios), Archivo para UI, IBM Plex Mono
      para lo que no es prosa (codigos, confirmaciones). Display solo arriba de 20px. */
   --font-sans: 'Archivo', 'Helvetica Neue', Helvetica, system-ui, sans-serif;

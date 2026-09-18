@@ -19,6 +19,8 @@ import { HorariosModule } from './horarios/horarios.module.js';
 import { RestriccionesModule } from './restricciones/restricciones.module.js';
 import { AdicionalesModule } from './adicionales/adicionales.module.js';
 import { ProductosModule } from './productos/productos.module.js';
+import { EspecialidadesModule } from './especialidades/especialidades.module.js';
+import { ArchivosModule } from './archivos/archivos.module.js';
 import { NotificacionesModule } from './notificaciones/notificaciones.module.js';
 import { WahaModule } from './integrations/waha/waha.module.js';
 
@@ -37,6 +39,8 @@ import { WahaModule } from './integrations/waha/waha.module.js';
     RestriccionesModule,
     AdicionalesModule,
     ProductosModule,
+    EspecialidadesModule,
+    ArchivosModule,
     NotificacionesModule,
     WahaModule,
     TelemetriaModule,

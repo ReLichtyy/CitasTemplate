@@ -28,6 +28,12 @@ waha-sessions/
 *.sqlite
 *.sqlite3
 citas-db-data/
+# Las imagenes subidas al API en local (apiBase/uploads) son datos de runtime del
+# servidor, no codigo: en produccion viven en el volumen del VPS y nunca viajaron por
+# Git. `apiBase/uploads/` es la instancia concreta; `uploads/` cubre cualquier otra
+# que aparezca (un segundo API de pruebas, por ejemplo).
+uploads/
+apiBase/uploads/
 # ...salvo las migraciones de Prisma: son *.sql y forman parte del codigo, no un dump.
 !apiBase/prisma/migrations/**/*.sql
 

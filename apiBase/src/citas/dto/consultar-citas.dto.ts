@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsISO8601, IsOptional, Max, Min } from 'class-validator';
+import { IsInt, IsISO8601, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
 /** Techo duro. Ninguna peticion se lleva la agenda entera, la pida como la pida. */
 export const LIMITE_MAXIMO = 100;
@@ -30,6 +30,16 @@ export class ConsultarCitasDto {
     { message: 'La fecha hasta debe ser una fecha ISO 8601.' },
   )
   hasta?: string;
+
+  /**
+   * Solo las citas de ese profesional. Es el filtro de la agenda del ADMIN, que ve todas;
+   * un EMPLEADO no lo necesita porque la propiedad ya le deja solo su agenda — y el
+   * `where` que arma `filtroPorPropiedad` se combina con este por AND, asi que pedir la
+   * agenda de otro no regala nada.
+   */
+  @IsOptional()
+  @IsUUID(undefined, { message: 'El profesional indicado no es valido.' })
+  empleadoId?: string;
 
   @IsOptional()
   @Type(() => Number)

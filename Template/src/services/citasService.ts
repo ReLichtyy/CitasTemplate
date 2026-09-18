@@ -96,6 +96,11 @@ export type FiltroCitas = {
   pagina?: number;
   /** El API lo topa en 100; si no se manda, usa 50. */
   limite?: number;
+  /**
+   * Solo las citas de ese profesional. Es el filtro de la agenda del ADMIN; un EMPLEADO
+   * ya recibe solo las suyas por propiedad, y el servidor combina las dos por AND.
+   */
+  empleadoId?: string;
 };
 
 function comoQuery(filtro: FiltroCitas = {}): string {

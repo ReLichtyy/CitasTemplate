@@ -110,6 +110,20 @@ function crearPrisma() {
         id: 'usr-nuevo',
         ...data,
       })),
+      update: vi.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { telefono: string };
+          data: { nombre: string; apellido?: string };
+        }) => ({
+          id: 'usr-registrado',
+          telefono: where.telefono,
+          aceptaWhatsapp: false,
+          ...data,
+        }),
+      ),
     },
     configuracionNegocio: {
       findUnique: vi.fn().mockResolvedValue({ zonaHoraria: 'UTC' }),
@@ -374,7 +388,7 @@ describe('CitasService.reservar sin sesion', () => {
     expect(cita.registradaPorId).toBe('usr-nuevo');
   });
 
-  it('cuelga la cita de la ficha existente sin reescribirla', async () => {
+  it('actualiza el nombre de la ficha existente con el del formulario', async () => {
     const { prisma, tx } = crearPrisma();
     tx.usuario.findUnique.mockImplementation(
       async ({ where }: { where: { id?: string; telefono?: string } }) =>
@@ -385,10 +399,16 @@ describe('CitasService.reservar sin sesion', () => {
 
     await crearServicio(prisma).servicio.reservar({ ...dtoBase, ...datosInvitado });
 
+    // No crea una ficha nueva: cuelga la cita de la existente.
     expect(tx.usuario.create).not.toHaveBeenCalled();
     expect(tx.cita.create.mock.calls[0][0].data.clienteId).toBe(
       'usr-registrado',
     );
+    // Pero si reescribe nombre y apellido con lo que el cliente acaba de escribir,
+    // que es lo que el aviso por WhatsApp va a usar.
+    const { data } = tx.usuario.update.mock.calls[0][0];
+    expect(data.nombre).toBe('Ana');
+    expect(data.apellido).toBe('Rojas');
   });
 
   it('no devuelve la ficha del titular del telefono en el comprobante', async () => {

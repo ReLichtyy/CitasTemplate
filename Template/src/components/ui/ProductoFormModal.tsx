@@ -1,13 +1,15 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Alert } from './Alert';
 import { Button } from './Button';
+import { CajaImagen, type CajaImagenHandle } from './CajaImagen';
 import { Dialogo } from './Dialogo';
 import { CAMPO_CLASSES, Field } from './Field';
+import { archivosService } from '../../services/archivosService';
 import type { CategoriaProducto, ProductoGestion } from '../../types/producto';
 import type { CrearProductoPayload } from '../../services/productosService';
 
 /** Los mismos topes que el DTO del API. Repetirlos aqui evita un viaje para saber que sobra. */
-const MAX = { nombre: 120, presentacion: 60, descripcion: 2000, imagenUrl: 500 };
+const MAX = { nombre: 120, presentacion: 60, descripcion: 2000 };
 
 /** Hasta dos decimales, que es lo que cabe en `Decimal(10, 2)`. Igual que el DTO. */
 const IMPORTE = /^\d{1,8}(\.\d{1,2})?$/;
@@ -69,13 +71,23 @@ export function ProductoFormModal({
   producto: ProductoGestion | null;
   categorias: CategoriaProducto[];
   onCerrar: () => void;
-  onGuardar: (datos: CrearProductoPayload) => void;
+  /**
+   * Devuelve si el guardado prospero. La imagen se sube recien aqui dentro —validado
+   * ya todo el formulario— y si el guardado falla, el modal deshace esa subida.
+   */
+  onGuardar: (datos: CrearProductoPayload) => Promise<boolean>;
   enviando: boolean;
   error: string | null;
 }) {
   const tituloId = useId();
   const [form, setForm] = useState<Formulario>(VACIO);
   const [tocado, setTocado] = useState(false);
+  const caja = useRef<CajaImagenHandle>(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [subidaError, setSubidaError] = useState<string | null>(null);
+  // En una ref y no en estado: tiene que verse en el mismo tick del doble clic, antes
+  // de que el proximo render exista. Mismo motivo que en `useAccionApi`.
+  const enVuelo = useRef(false);
 
   /**
    * Siembra el formulario al abrir, ajustando el estado **durante el render** y no desde un
@@ -96,6 +108,7 @@ export function ProductoFormModal({
     setSembradoPara(objetivo);
     setForm(producto ? desdeProducto(producto) : VACIO);
     setTocado(false);
+    setSubidaError(null);
   }
 
   const campo = <K extends keyof Formulario>(clave: K, valor: Formulario[K]) =>
@@ -109,30 +122,57 @@ export function ProductoFormModal({
   };
   const valido = Object.values(problemas).every((problema) => problema === null);
 
+  // La subida de la imagen es parte del guardado: mientras viaja, el formulario esta
+  // ocupado igual que cuando el API esta creando el registro.
+  const ocupado = enviando || subiendo;
+
   const cerrar = () => {
-    if (!enviando) {
+    if (!ocupado) {
       onCerrar();
     }
   };
 
-  function enviar() {
+  async function enviar() {
     setTocado(true);
-    if (!valido || enviando) {
+    if (!valido || ocupado || enVuelo.current) {
       return;
     }
-    onGuardar({
-      categoriaId: form.categoriaId,
-      nombre: form.nombre.trim(),
-      precio: form.precio,
-      presentacion: form.presentacion.trim(),
-      // Los opcionales se **omiten** en vez de mandarse vacios: el DTO valida `imagenUrl`
-      // como URL, y una cadena vacia seria un 400 por un campo que el usuario dejo en blanco
-      // a proposito.
-      ...(form.descripcion.trim() ? { descripcion: form.descripcion.trim() } : {}),
-      ...(form.imagenUrl.trim() ? { imagenUrl: form.imagenUrl.trim() } : {}),
-      activo: form.activo,
-      disponible: form.disponible,
-    });
+    enVuelo.current = true;
+    setSubiendo(true);
+    setSubidaError(null);
+    try {
+      // La imagen recien se sube aqui: nada toco el servidor mientras se llenaba el
+      // formulario, y si la validacion corta el intento, tampoco la subida.
+      const subida = (await caja.current?.subirSiExiste()) ?? null;
+      // La URL nueva si se subio archivo; si no, la que el registro ya tenia.
+      const imagenUrl = subida ?? form.imagenUrl.trim();
+      const guardado = await onGuardar({
+        categoriaId: form.categoriaId,
+        nombre: form.nombre.trim(),
+        precio: form.precio,
+        presentacion: form.presentacion.trim(),
+        // Los opcionales se **omiten** en vez de mandarse vacios: el DTO valida `imagenUrl`
+        // como URL, y una cadena vacia seria un 400 por un campo que el usuario dejo en blanco
+        // a proposito.
+        ...(form.descripcion.trim() ? { descripcion: form.descripcion.trim() } : {}),
+        ...(imagenUrl ? { imagenUrl } : {}),
+        activo: form.activo,
+        disponible: form.disponible,
+      });
+      if (!guardado && subida) {
+        // El producto no se guardo y la URL no la referencia nadie: deshacer la subida
+        // para no dejar una imagen huerfana en el disco del servidor. Mejor esfuerzo:
+        // si el borrado tampoco llega, queda huerfana, que ya era el estado sin esto.
+        archivosService.eliminar(subida).catch(() => undefined);
+      }
+    } catch (fallo) {
+      // Solo `subirSiExiste` lanza: el guardado de la pagina devuelve null al fallar.
+      // El texto sale del API cuando lo trae: es el que sabe que fallo de verdad.
+      setSubidaError(fallo instanceof Error ? fallo.message : 'No se pudo subir la imagen.');
+    } finally {
+      enVuelo.current = false;
+      setSubiendo(false);
+    }
   }
 
   const verError = (clave: keyof typeof problemas) => (tocado ? problemas[clave] : null);
@@ -148,7 +188,7 @@ export function ProductoFormModal({
           Categoria
           <select
             value={form.categoriaId}
-            disabled={enviando}
+            disabled={ocupado}
             onChange={(evento) => campo('categoriaId', evento.target.value)}
             className={CAMPO_CLASSES}
           >
@@ -168,7 +208,7 @@ export function ProductoFormModal({
           label="Nombre"
           value={form.nombre}
           maxLength={MAX.nombre}
-          disabled={enviando}
+          disabled={ocupado}
           hint={
             verError('nombre') && (
               <span className="font-medium text-danger">{problemas.nombre}</span>
@@ -186,7 +226,7 @@ export function ProductoFormModal({
             inputMode="decimal"
             placeholder="24.00"
             value={form.precio}
-            disabled={enviando}
+            disabled={ocupado}
             wrapperClassName="min-w-32 flex-1"
             hint={
               verError('precio') && (
@@ -200,7 +240,7 @@ export function ProductoFormModal({
             placeholder="50 ml"
             value={form.presentacion}
             maxLength={MAX.presentacion}
-            disabled={enviando}
+            disabled={ocupado}
             wrapperClassName="min-w-32 flex-1"
             hint={
               verError('presentacion') && (
@@ -211,15 +251,14 @@ export function ProductoFormModal({
           />
         </div>
 
-        <Field
-          label="Imagen (URL)"
-          type="url"
-          placeholder="https://..."
-          value={form.imagenUrl}
-          maxLength={MAX.imagenUrl}
-          disabled={enviando}
-          hint="Opcional. Sin imagen, la card muestra la inicial del nombre."
-          onChange={(evento) => campo('imagenUrl', evento.target.value)}
+        <CajaImagen
+          // `key` por objetivo: al cerrar o reabrir sobre otro producto, la caja se
+          // remonta y el archivo pendiente de la sesion anterior no se arrastra.
+          key={objetivo ?? 'cerrado'}
+          label="Imagen"
+          url={form.imagenUrl || null}
+          disabled={ocupado}
+          ref={caja}
         />
 
         <label className="flex flex-col gap-1 text-sm text-text">
@@ -228,7 +267,7 @@ export function ProductoFormModal({
             rows={3}
             maxLength={MAX.descripcion}
             value={form.descripcion}
-            disabled={enviando}
+            disabled={ocupado}
             placeholder="Que hace y como se usa."
             onChange={(evento) => campo('descripcion', evento.target.value)}
             className={`${CAMPO_CLASSES} min-h-20 resize-y py-2`}
@@ -243,7 +282,7 @@ export function ProductoFormModal({
             <input
               type="checkbox"
               checked={form.activo}
-              disabled={enviando}
+              disabled={ocupado}
               onChange={(evento) => campo('activo', evento.target.checked)}
               className="size-4 shrink-0 accent-accent"
             />
@@ -256,7 +295,7 @@ export function ProductoFormModal({
             <input
               type="checkbox"
               checked={form.disponible}
-              disabled={enviando}
+              disabled={ocupado}
               onChange={(evento) => campo('disponible', evento.target.checked)}
               className="size-4 shrink-0 accent-accent"
             />
@@ -271,13 +310,20 @@ export function ProductoFormModal({
 
         {/* El texto sale del API: es el que sabe que fallo de verdad. */}
         {error && <Alert>{error}</Alert>}
+        {subidaError && <Alert>{subidaError}</Alert>}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="secondary" onClick={cerrar} disabled={enviando}>
+          <Button variant="secondary" onClick={cerrar} disabled={ocupado}>
             Cancelar
           </Button>
-          <Button onClick={enviar} disabled={enviando}>
-            {enviando ? 'Guardando...' : producto ? 'Guardar cambios' : 'Agregar producto'}
+          <Button onClick={enviar} disabled={ocupado}>
+            {enviando
+              ? 'Guardando...'
+              : subiendo
+                ? 'Subiendo imagen...'
+                : producto
+                  ? 'Guardar cambios'
+                  : 'Agregar producto'}
           </Button>
         </div>
       </div>

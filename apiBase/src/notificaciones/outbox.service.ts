@@ -20,7 +20,7 @@ import { NotificacionesWorker } from './notificaciones.worker.js';
 export interface DatosAviso {
   id: string;
   inicio: Date;
-  cliente: { nombre: string; telefono: string; aceptaWhatsapp: boolean };
+  cliente: { nombre: string; apellido: string | null; telefono: string; aceptaWhatsapp: boolean };
   servicio: { nombre: string };
   empleado: { usuario: { nombre: string; apellido: string | null } };
 }
@@ -104,7 +104,9 @@ export class OutboxService {
     );
 
     const variables = {
-      nombre: cita.cliente.nombre,
+      nombre: [cita.cliente.nombre, cita.cliente.apellido]
+        .filter(Boolean)
+        .join(' '),
       negocio: negocio?.nombre ?? '',
       servicio: cita.servicio.nombre,
       profesional: [

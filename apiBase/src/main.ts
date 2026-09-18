@@ -30,10 +30,14 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const esProduccion = process.env.NODE_ENV === 'production';
 
-  // Cabeceras de seguridad. `contentSecurityPolicy` en su default estricto sirve para una
-  // API que solo devuelve JSON; la unica pagina que se sirve es /docs, y solo fuera de
-  // produccion.
-  app.use(helmet());
+  // Cabeceras de seguridad. La CSP estricta de helmet bloquea el CDN y los scripts/estilos
+  // inline que Scalar inyecta en /docs, y /docs es la unica pagina HTML que se sirve —solo
+  // fuera de produccion. En produccion se mantiene el default estricto; alla /docs no corre.
+  app.use(
+    helmet({
+      contentSecurityPolicy: esProduccion ? undefined : false,
+    }),
+  );
 
   app.useBodyParser('json', { limit: LIMITE_CUERPO });
   app.useBodyParser('urlencoded', { limit: LIMITE_CUERPO, extended: true });

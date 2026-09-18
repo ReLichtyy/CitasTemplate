@@ -64,12 +64,19 @@ function App() {
             al login. */}
         <Route element={<ProtectedRoute redirigirA="/sistema/no-autorizado" />}>
           <Route path="/citas" element={<CitasListPage />} />
-          <Route path="/citas/agenda" element={<AgendaPage />} />
           <Route path="/citas/:id" element={<DetalleCitaPage />} />
           <Route path="/citas/:id/editar" element={<EditarCitaPage />} />
+        </Route>
 
-          {/* gestion: admin + empleado only */}
+        {/* gestion y agenda: sin sesion se le invita a entrar —el login vuelve al
+            destino que queria abrir— y con sesion de CLIENTE la expulsa RoleRoute. Es
+            distinto de /citas a proposito: a la gestion se llega queriendo administrar, y
+            ahi si hay algo que completar entrando. */}
+        <Route element={<ProtectedRoute />}>
+          {/* La agenda es la pantalla de trabajo del personal, no una consulta de
+              cliente: vive con la gestion aunque su ruta diga /citas. */}
           <Route element={<RoleRoute allow={['ADMIN', 'EMPLEADO']} />}>
+            <Route path="/citas/agenda" element={<AgendaPage />} />
             <Route path="/gestion/servicios" element={<ServiciosListPage />} />
             <Route path="/gestion/servicios/:id" element={<ServicioDetallePage />} />
             {/* Productos es la unica gestion cerrada a ADMIN: en el API, hasta la

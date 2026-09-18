@@ -70,10 +70,12 @@ export function renderizar(
   switch (plantilla) {
     case TipoNotificacion.CONFIRMACION_CITA:
       return [
+        '✅ Cita reservada',
+        '',
         `Hola ${nombre}, su cita en ${negocio} quedo reservada.`,
         '',
-        `${servicio} con ${profesional}`,
-        fecha,
+        `📅 ${servicio} con ${profesional}`,
+        `🕒 ${fecha}`,
         '',
         'Confirmela aqui:',
         enlace,
@@ -81,18 +83,22 @@ export function renderizar(
 
     case TipoNotificacion.RECORDATORIO_CITA:
       return [
+        '⏰ Recordatorio de su cita',
+        '',
         `Hola ${nombre}, le recordamos su cita en ${negocio}.`,
         '',
-        `${servicio} con ${profesional}`,
-        fecha,
+        `📅 ${servicio} con ${profesional}`,
+        `🕒 ${fecha}`,
       ].join('\n');
 
     case TipoNotificacion.CANCELACION_CITA:
       return [
+        '❌ Cita cancelada',
+        '',
         `Hola ${nombre}, su cita en ${negocio} fue cancelada.`,
         '',
-        `${servicio} con ${profesional}`,
-        fecha,
+        `📅 ${servicio} con ${profesional}`,
+        `🕒 ${fecha}`,
       ].join('\n');
   }
 }

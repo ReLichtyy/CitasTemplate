@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
 import { Alert } from '../../../components/ui/Alert';
 import { Button } from '../../../components/ui/Button';
-import { CARD_SHELL_CLASSES, Card } from '../../../components/ui/Card';
+import { CARD_SHELL_CLASSES } from '../../../components/ui/Card';
 import { EmptyState } from '../../../components/ui/EmptyState';
-import { PageHeader } from '../../../components/ui/PageHeader';
 import { ProductoFormModal } from '../../../components/ui/ProductoFormModal';
 import { Skeleton } from '../../../components/ui/Skeleton';
-import { Thumbnail } from '../../../components/ui/Thumbnail';
+import { GestionItemRow } from '../../../components/gestion/GestionItemRow';
+import { GestionLayout } from '../../../components/gestion/GestionLayout';
 import { useAccionApi } from '../../../hooks/useAccionApi';
 import { useRecursoApi } from '../../../hooks/useRecursoApi';
 import { configuracionPlaceholder } from '../../../lib/configuracionPlaceholder';
@@ -88,6 +88,9 @@ export function ProductosListPage() {
       // implementacion del mismo criterio.
       setVersion((n) => n + 1);
     }
+    // El modal lo espera: con false sabe que la imagen que subio justo antes quedo sin
+    // el registro que la referencia, y la deshace.
+    return resultado !== null;
   }
 
   async function confirmarDespublicar(producto: ProductoGestion) {
@@ -99,24 +102,24 @@ export function ProductosListPage() {
   const lista = productos.datos ?? [];
 
   return (
-    <div className="flex flex-col gap-6 py-6">
-      <PageHeader
-        title={terminoProductoPlural}
-        actions={
-          <Button
-            className="shrink-0 px-4 py-2 text-xs sm:px-6 sm:py-3 sm:text-sm"
-            onClick={() => {
-              guardar.limpiarError();
-              setEdicion('nuevo');
-            }}
-            // Sin categorias no hay alta posible: el formulario pediria elegir una de una
-            // lista vacia. Es preferible el boton apagado a un dialogo sin salida.
-            disabled={categorias.cargando || (categorias.datos ?? []).length === 0}
-          >
-            Agregar producto
-          </Button>
-        }
-      />
+    <GestionLayout
+      pestana="productos"
+      titulo={terminoProductoPlural}
+      acciones={
+        <Button
+          className="shrink-0 px-4 py-2 text-xs sm:px-6 sm:py-3 sm:text-sm"
+          onClick={() => {
+            guardar.limpiarError();
+            setEdicion('nuevo');
+          }}
+          // Sin categorias no hay alta posible: el formulario pediria elegir una de una
+          // lista vacia. Es preferible el boton apagado a un dialogo sin salida.
+          disabled={categorias.cargando || (categorias.datos ?? []).length === 0}
+        >
+          Agregar producto
+        </Button>
+      }
+    >
 
       {productos.error && <Alert>{productos.error}</Alert>}
       {categorias.error && <Alert>{categorias.error}</Alert>}
@@ -150,55 +153,43 @@ export function ProductosListPage() {
       {!productos.cargando && lista.length > 0 && (
         <div className="flex flex-col gap-3">
           {lista.map((producto) => (
-            <Card
+            <GestionItemRow
               key={producto.id}
-              className={`flex flex-col gap-3 sm:flex-row sm:items-center ${producto.activo ? '' : 'opacity-70'}`}
-            >
-              <Thumbnail
-                src={producto.imagenUrl}
-                fallback={producto.nombre.charAt(0).toUpperCase()}
-                className="size-14 shrink-0 rounded-lg text-xl"
-              />
-
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="m-0 truncate font-medium text-text-h">{producto.nombre}</p>
-                  <EstadoProducto producto={producto} />
-                </div>
-                <p className="m-0 text-sm text-text-muted">
-                  {producto.categoria.nombre} · {producto.presentacion} ·{' '}
-                  <span className="font-medium tabular-nums text-price">
-                    {formatPrice(producto.precio, moneda, locale)}
-                  </span>
-                </p>
-              </div>
-
-              <div className="flex shrink-0 gap-2">
-                <Button
-                  variant="secondary"
-                  className="min-h-11 px-4 py-2"
-                  onClick={() => {
-                    guardar.limpiarError();
-                    setEdicion(producto);
-                  }}
-                >
-                  Editar
-                </Button>
-                {/* Despublicar es reversible —se vuelve a publicar desde el formulario—, asi
-                    que no lleva dialogo de confirmacion. El que lo lleva es cancelar una
-                    cita, que suelta un espacio que otro puede tomar. */}
-                {producto.activo && (
+              imagen={producto.imagenUrl}
+              monograma={producto.nombre.charAt(0).toUpperCase()}
+              titulo={producto.nombre}
+              subtitulo={`${producto.categoria.nombre} · ${producto.presentacion}`}
+              precio={formatPrice(producto.precio, moneda, locale)}
+              chip={<EstadoProducto producto={producto} />}
+              atenuada={!producto.activo}
+              acciones={
+                <>
                   <Button
                     variant="secondary"
                     className="min-h-11 px-4 py-2"
-                    disabled={despublicar.enviando}
-                    onClick={() => confirmarDespublicar(producto)}
+                    onClick={() => {
+                      guardar.limpiarError();
+                      setEdicion(producto);
+                    }}
                   >
-                    Despublicar
+                    Editar
                   </Button>
-                )}
-              </div>
-            </Card>
+                  {/* Despublicar es reversible —se vuelve a publicar desde el formulario—,
+                      asi que no lleva dialogo de confirmacion. El que lo lleva es cancelar
+                      una cita, que suelta un espacio que otro puede tomar. */}
+                  {producto.activo && (
+                    <Button
+                      variant="secondary"
+                      className="min-h-11 px-4 py-2"
+                      disabled={despublicar.enviando}
+                      onClick={() => confirmarDespublicar(producto)}
+                    >
+                      Despublicar
+                    </Button>
+                  )}
+                </>
+              }
+            />
           ))}
         </div>
       )}
@@ -212,6 +203,6 @@ export function ProductosListPage() {
         enviando={guardar.enviando}
         error={guardar.error}
       />
-    </div>
+    </GestionLayout>
   );
 }

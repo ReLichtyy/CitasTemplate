@@ -96,13 +96,16 @@ function mensajeDeError(cuerpo: unknown, response: Response): string {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem(TOKEN_STORAGE_KEY);
   const metodo = options?.method ?? 'GET';
+  // Un FormData no se serializa: el navegador arma el multipart con su propia boundary, y
+  // fijarle Content-Type a mano la estropea (la boundary viaja dentro de ese header).
+  const esFormData = options?.body instanceof FormData;
 
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...(esFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options?.headers,
       },
@@ -170,6 +173,13 @@ export const apiClient = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+  /**
+   * Multipart para `POST /archivos`: la imagen viaja como archivo, no como cadena. El API
+   * la guarda y devuelve la URL que se persiste en `imagenUrl`/`fotoUrl` — el formulario
+   * no conoce el almacen, solo la URL que el API le devuelve.
+   */
+  postArchivo: <T>(path: string, archivo: FormData) =>
+    request<T>(path, { method: 'POST', body: archivo }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   /**
