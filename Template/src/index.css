@@ -264,7 +264,10 @@ body::before {
 #root {
   position: relative;
   z-index: 1;
-  min-height: 100svh;
+  /* dvh sigue al viewport dinamico de Safari: cuando las toolbars colapsan, el viewport
+     crece y el contenedor crece con el, asi el footer (al fondo del flex) coincide con el
+     BottomNav fijo (al fondo del viewport) sin hueco. svh quedaba corto en ese caso. */
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }

@@ -3,8 +3,12 @@ import type { InputHTMLAttributes, ReactNode } from 'react';
 // El campo se apoya en `bg-surface` como las cards: sobre el plateado del fondo, un input
 // del mismo color que la pagina no se lee como una caja donde escribir. El borde toma el
 // acento en hover y en foco, que es la unica diferencia entre "hay algo aqui" y "estoy aqui".
+//
+// `text-base md:text-sm`: en mobile el campo lleva 16px para que Safari iOS no haga
+// auto-zoom al enfocarlo (lo hace cuando el font-size es menor a 16px). Desde md vuelve a
+// 14px para no cambiar el tamano de escritorio. Ver Template/CLAUDE.md — piso de 360px.
 export const CAMPO_CLASSES =
-  'min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-text-h transition-[border-color,box-shadow] duration-150 placeholder:text-text-muted hover:border-accent-border focus-visible:border-accent-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border';
+  'min-h-11 w-full rounded-lg border border-border bg-surface px-3 text-base text-text-h md:text-sm transition-[border-color,box-shadow] duration-150 placeholder:text-text-muted hover:border-accent-border focus-visible:border-accent-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border';
 
 type FieldProps = InputHTMLAttributes<HTMLInputElement> & {
   label: string;
