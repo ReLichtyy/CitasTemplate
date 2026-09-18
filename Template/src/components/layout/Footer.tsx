@@ -21,9 +21,11 @@ export function Footer() {
   const { eslogan } = configuracionPlaceholder;
 
   return (
-    // pb-16 deja sitio a BottomNav (fixed, solo por debajo de md) para que su ultima fila
-    // no quede tapada al llegar al final de la pagina.
-    <footer className="relative border-t border-border bg-surface pb-16 md:pb-0">
+    // pb-[calc(4rem+env(safe-area-inset-bottom))] deja sitio a BottomNav (fixed, solo por
+    // debajo de md) para que su ultima fila no quede tapada al llegar al final de la pagina.
+    // El base es 4rem (64px) y se le suma el filo seguro inferior de los telefonos con home
+    // indicator: sin el, la barra meta queda detras de la barra de navegacion.
+    <footer className="relative border-t border-border bg-surface pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
       {/* Filo de luz sobre el borde: el pie es el unico corte a todo lo ancho de la app y
           esto lo vuelve un cierre en vez de una linea mas. */}
       <span

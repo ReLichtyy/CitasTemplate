@@ -7,8 +7,11 @@ export function AppLayout() {
   return (
     <div className="flex min-h-svh flex-col">
       <Navbar />
-      {/* pb-24 deja sitio a BottomNav, que es fixed y solo existe por debajo de md. */}
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 pt-10 pb-24 md:pb-10">
+      {/* pb-[calc(6rem+env(safe-area-inset-bottom))] deja sitio a BottomNav, que es fixed y
+          solo existe por debajo de md. El base es 6rem (96px) y se le suma el filo seguro
+          inferior de los telefonos con home indicator, para que el contenido final de main
+          no quede oculto detras de la barra en ningun viewport. */}
+      <main className="mx-auto w-full max-w-5xl flex-1 px-6 pt-10 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-10">
         <Outlet />
       </main>
       <Footer />

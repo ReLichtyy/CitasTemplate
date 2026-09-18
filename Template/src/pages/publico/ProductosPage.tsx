@@ -89,20 +89,20 @@ export function ProductosPage() {
               divisor
             />
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               {listaCategorias.map((categoria, indice) => (
-                <Card key={categoria.id} className="flex flex-col gap-2">
+                <Card key={categoria.id} className="flex flex-col gap-1.5 sm:gap-2">
                   <Eyebrow tono="acento" className="tabular-nums">
                     {`${indice + 1}`.padStart(2, '0')}
                   </Eyebrow>
                   {/* Sin `font-heading font-normal tracking-tight text-text-h`: index.css ya
                       se los aplica a todo h3. */}
-                  <h3 className="text-xl sm:text-2xl">{categoria.nombre}</h3>
+                  <h3 className="text-base sm:text-2xl">{categoria.nombre}</h3>
                   {/* La promesa es la respuesta a "por que me serviria": va antes que el
                       detalle y con mas peso, porque es lo que decide si sigue leyendo. */}
-                  <p className="font-medium text-text-h">{categoria.promesa}</p>
+                  <p className="text-sm font-medium text-text-h sm:text-base">{categoria.promesa}</p>
                   {categoria.descripcion && (
-                    <p className="text-sm leading-relaxed text-text-muted">
+                    <p className="text-xs leading-relaxed text-text-muted sm:text-sm">
                       {categoria.descripcion}
                     </p>
                   )}

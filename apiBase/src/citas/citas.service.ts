@@ -33,7 +33,7 @@ const CODIGO_ESTADO_CONFIRMADA = 'CONFIRMADA';
 const CODIGO_ESTADO_CANCELADA = 'CANCELADA';
 
 /** Granularidad con la que se ofrecen horarios libres en /citas/disponibilidad. */
-const PASO_MINUTOS = 15;
+const PASO_MINUTOS = 40;
 
 /**
  * El 409 es el unico error que el usuario final lee tal cual, asi que se redacta

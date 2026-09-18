@@ -244,7 +244,7 @@ const EMPLEADOS = [
  * - Ningun servicio lo realizan todos: es lo que hace visible el filtro por profesional al
  *   reservar, y la regla "ese profesional no realiza ese servicio".
  * - Dos servicios van sin imagen, para ver como se comporta la card sin ella.
- * - Las duraciones no son todas multiplos redondos del paso de 15 minutos, para que la
+ * - Las duraciones no son todas multiplos redondos del paso de 40 minutos, para que la
  *   grilla de horarios no salga siempre alineada por casualidad.
  */
 const SERVICIOS = [

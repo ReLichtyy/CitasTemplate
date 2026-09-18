@@ -31,21 +31,21 @@ export function ProductoCard({ producto, moneda, locale, onSelect }: ProductoCar
         <CardCover
           src={imagenUrl}
           fallback={nombre.charAt(0).toUpperCase()}
-          className="aspect-4/3"
+          className="aspect-16/9 sm:aspect-4/3"
         />
-        <Disponibilidad disponible={disponible} className="absolute top-3 right-3" />
+        <Disponibilidad disponible={disponible} className="absolute top-2 right-2 sm:top-3 sm:right-3" />
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-4">
+      <div className="flex flex-1 flex-col gap-1.5 p-3 sm:gap-2 sm:p-4">
         <div className="flex items-start gap-2">
-          <p className="line-clamp-2 min-w-0 flex-1 font-semibold tracking-tight text-text-h">
+          <p className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold tracking-tight text-text-h sm:text-base">
             {nombre}
           </p>
           <CardDetailIcon />
         </div>
         <div className="mt-auto flex items-baseline justify-between gap-3">
-          <span className="whitespace-nowrap text-sm text-text-muted">{presentacion}</span>
-          <span className="whitespace-nowrap text-lg font-bold tabular-nums text-price">
+          <span className="whitespace-nowrap text-xs text-text-muted sm:text-sm">{presentacion}</span>
+          <span className="whitespace-nowrap text-base font-bold tabular-nums text-price sm:text-lg">
             {formatPrice(precio, moneda, locale)}
           </span>
         </div>
