@@ -98,6 +98,42 @@ export class PayloadWahaDto {
   @IsOptional()
   @IsBoolean()
   fromMe?: boolean;
+
+  /**
+   * El mensaje crudo de NOWEB, de donde solo se leen los JID. Es el arreglo del
+   * `@lid`: desde las versiones 2025.9 de WAHA, `from` puede traer la direccion
+   * LID del contacto en vez de la basada en telefono (`123...@lid`), y el JID
+   * correcto queda en `_data.key.remoteJidAlt` (o `remoteJid`). Se declara acotado
+   * —solo esos dos campos, solo su tamaño— y el `whitelist` descarta el resto,
+   * que son decenas de campos del mensaje crudo que aqui no importan.
+   *
+   * Ver 11-chatbot-reservas.md y los issues #1418/#1608 de WAHA.
+   */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DatosCrudosWahaDto)
+  _data?: DatosCrudosWahaDto;
+}
+
+class DatosCrudosWahaDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ClaveCrudaWahaDto)
+  key?: ClaveCrudaWahaDto;
+}
+
+class ClaveCrudaWahaDto {
+  /** La direccion basada en telefono cuando `remoteJid` trae el LID. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  remoteJidAlt?: string;
+
+  /** La direccion principal; puede ser `@lid` o `@c.us` segun el contacto. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  remoteJid?: string;
 }
 
 export class EventoWahaDto {

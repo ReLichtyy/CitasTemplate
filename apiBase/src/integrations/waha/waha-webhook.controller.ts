@@ -128,8 +128,13 @@ export class WahaWebhookController {
    *
    * `fromMe` primero: cada respuesta del bot genera su propio evento `message`,
    * y sin descartarlo el bot se contesta a si mismo en un bucle que solo para
-   * con la tarifa. Un mensaje sin texto (sticker, audio) no tiene a quien
-   * entrarle: no es un error, es ruido para este flujo.
+   * con la tarifa.
+   *
+   * El remitente se busca en tres direcciones, en orden: `from` y, si trae un
+   * `@lid` (WAHA >= 2025.9 lo manda para algunos contactos), el JID de telefono
+   * que el mensaje crudo lleva en `remoteJidAlt` y `remoteJid`. Un mensaje sin
+   * texto (sticker, audio) no tiene a quien entrarle: no es un error, es ruido
+   * para este flujo.
    */
   private async procesarMensaje(evento: EventoWahaDto): Promise<void> {
     const payload = evento.payload;
@@ -139,10 +144,19 @@ export class WahaWebhookController {
       return;
     }
 
-    const identidades = telefonoDeChatId(payload?.from);
+    const identidades =
+      telefonoDeChatId(payload?.from) ??
+      telefonoDeChatId(payload?._data?.key?.remoteJidAlt) ??
+      telefonoDeChatId(payload?._data?.key?.remoteJid);
     const texto = payload?.body?.trim();
     if (!identidades || !texto) {
-      this.logger.debug('Mensaje sin remitente utilizable o sin texto: se descarta.');
+      this.logger.debug(
+        `Mensaje sin remitente utilizable o sin texto: se descarta ` +
+          `(from=${payload?.from ?? 'ausente'}, ` +
+          `remoteJidAlt=${payload?._data?.key?.remoteJidAlt ?? 'ausente'}, ` +
+          `remoteJid=${payload?._data?.key?.remoteJid ?? 'ausente'}, ` +
+          `texto=${texto ? 'presente' : 'ausente'}).`,
+      );
       return;
     }
 
