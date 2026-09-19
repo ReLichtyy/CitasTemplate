@@ -2,6 +2,7 @@
  * Vocabulario de WhatsApp/WAHA. Vive aqui y no sale de esta carpeta: `@c.us` o
  * `ack` en el outbox serian la frontera del gateway rompiendose.
  */
+import { TELEFONO_REGEX, normalizarTelefono } from '../../common/telefono.js';
 
 /**
  * Respuesta de `POST /api/sendText`.
@@ -53,6 +54,30 @@ export interface EventoWaha {
  */
 export function aChatId(telefonoE164: string): string {
   return `${telefonoE164.replace(/\D/g, '')}@c.us`;
+}
+
+/**
+ * La direccion inversa de `aChatId`: de un chatId de origen a las dos formas que
+ * el API necesita. Vive aqui, junto a la directa — es la misma frontera.
+ *
+ * `telefono` es la forma local (8 digitos) con la que el producto identifica al
+ * cliente; `destino` es E.164 con `+`, a donde se contesta. Un chatId que no
+ * normaliza (numero de otro pais, `@lid` de NOWEB) devuelve `null`: no es un error
+ * a arreglar, es alguien a quien este despliegue no puede reservarle.
+ */
+export function telefonoDeChatId(
+  chatId: string | undefined,
+): { telefono: string; destino: string } | null {
+  if (typeof chatId !== 'string' || !chatId.endsWith('@c.us')) {
+    return null;
+  }
+
+  const digitos = chatId.slice(0, -'@c.us'.length).replace(/\D/g, '');
+  const telefono = normalizarTelefono(digitos);
+  if (!TELEFONO_REGEX.test(telefono)) {
+    return null;
+  }
+  return { telefono, destino: `+${digitos}` };
 }
 
 /**

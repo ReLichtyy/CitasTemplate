@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
@@ -74,6 +75,29 @@ export class PayloadWahaDto {
   @IsString()
   @MaxLength(64)
   status?: string;
+
+  /**
+   * En `message`: el chatId de quien escribe. Acotado por tamaño — la forma la
+   * interpreta `telefonoDeChatId`, que es su unico lector legitimo.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  from?: string;
+
+  /** El texto del mensaje entrante. Stickers, audios y ubicaciones no traen. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(4096)
+  body?: string;
+
+  /**
+   * `true` cuando el mensaje lo mando esta misma sesion — lo que incluye cada
+   * respuesta del chatbot. No descartarlo ahi es el bucle del bot contestandose.
+   */
+  @IsOptional()
+  @IsBoolean()
+  fromMe?: boolean;
 }
 
 export class EventoWahaDto {

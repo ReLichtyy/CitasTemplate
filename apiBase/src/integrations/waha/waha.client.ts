@@ -74,34 +74,62 @@ export class WahaClient extends WhatsappGateway {
 
     const texto = renderizar(plantilla, variables);
     const adjunto = adjuntoDe(plantilla);
-    const cuerpo = adjunto
-      ? {
-          session: sesion,
-          chatId: aChatId(destino),
-          // WhatsApp llama "caption" al texto que acompaña a una imagen. Va en la
-          // **misma** peticion: mandar imagen y texto por separado son dos mensajes en
-          // el chat, dos latencias y dos filas que conciliar.
-          caption: texto,
-          file: {
-            mimetype: adjunto.mimetype,
-            filename: adjunto.nombre,
-            data: await this.enBase64(adjunto),
-          },
-        }
-      : { session: sesion, chatId: aChatId(destino), text: texto };
-
-    const ruta = adjunto ? 'sendImage' : 'sendText';
+    const soloTexto = { session: sesion, chatId: aChatId(destino), text: texto };
 
     let respuesta;
     try {
-      respuesta = await firstValueFrom(
-        this.http.post<RespuestaEnvioWaha>(`${url}/api/${ruta}`, cuerpo, {
-          headers: { 'X-Api-Key': apiKey },
-          timeout: this.config.get<number>('waha.timeoutMs'),
-        }),
+      // El cuerpo con imagen se arma aqui y no antes del try: si `enBase64` no puede
+      // leer el asset, el fallo cae por el mismo camino que un rechazo del canal y el
+      // aviso sale igual como texto. La imagen es del despliegue; el aviso, del negocio.
+      const cuerpo = adjunto
+        ? {
+            session: sesion,
+            chatId: aChatId(destino),
+            // WhatsApp llama "caption" al texto que acompaña a una imagen. Va en la
+            // **misma** peticion: mandar imagen y texto por separado son dos mensajes en
+            // el chat, dos latencias y dos filas que conciliar.
+            caption: texto,
+            file: {
+              mimetype: adjunto.mimetype,
+              filename: adjunto.nombre,
+              data: await this.enBase64(adjunto),
+            },
+          }
+        : soloTexto;
+
+      respuesta = await this.publicar<RespuestaEnvioWaha>(
+        url,
+        apiKey,
+        adjunto ? 'sendImage' : 'sendText',
+        cuerpo,
       );
     } catch (error) {
-      throw this.traducir(error);
+      // Sin adjunto no hay a donde caer: el rechazo es del mensaje o del canal, y
+      // `traducir` ya sabe distinguirlos.
+      if (!adjunto) {
+        throw this.traducir(error);
+      }
+
+      /**
+       * La imagen es cortesia; el aviso es el texto con el enlace de confirmacion.
+       * NOWEB tiene fallos conocidos de subida de medios, y un mensaje que muere
+       * porque fallo la decoracion es exactamente el aviso que este modulo tiene que
+       * entregar si o si: se reenvia solo texto, que es la unica parte que el
+       * cliente necesita para confirmar la cita.
+       */
+      this.logger.warn(
+        `Fallo el envio con imagen (${this.detalle(error)}); se reenvia solo texto.`,
+      );
+      try {
+        respuesta = await this.publicar<RespuestaEnvioWaha>(
+          url,
+          apiKey,
+          'sendText',
+          soloTexto,
+        );
+      } catch (errorTexto) {
+        throw this.traducir(errorTexto);
+      }
     }
 
     /**
@@ -117,6 +145,44 @@ export class WahaClient extends WhatsappGateway {
     if (!idExterno) {
       // No es un fallo de envio: el mensaje salio. Pero sin id no hay con que conciliar
       // el acuse de entrega despues, y eso conviene verlo en el log.
+      this.logger.warn('WAHA acepto el mensaje sin devolver id.');
+    }
+    return { idExterno };
+  }
+
+  /**
+   * Texto de conversacion (chatbot): sin plantilla y sin adjunto, pero con el mismo
+   * contrato que `enviar` — misma validacion de destino, misma comprobacion de
+   * sesion, misma traduccion de errores — porque es el mismo canal y los fallos
+   * significan lo mismo. Ver 11-chatbot-reservas.md.
+   */
+  async enviarTexto(destino: string, texto: string): Promise<ResultadoEnvio> {
+    const { url, apiKey, sesion } = this.credenciales();
+
+    if (!/^\+[1-9]\d{7,14}$/.test(destino)) {
+      throw new EnvioPermanenteError(
+        `Destino sin forma internacional valida: ${destino}`,
+      );
+    }
+
+    await this.exigirSesionOperativa(url, apiKey, sesion);
+
+    let respuesta: { data: RespuestaEnvioWaha };
+    try {
+      respuesta = await this.publicar<RespuestaEnvioWaha>(url, apiKey, 'sendText', {
+        session: sesion,
+        chatId: aChatId(destino),
+        text: texto,
+      });
+    } catch (error) {
+      throw this.traducir(error);
+    }
+
+    // Un envio aceptado revalida la sesion, igual que en `enviar`.
+    this.estadoVerificadoEn = Date.now();
+
+    const idExterno = idDeMensaje(respuesta.data?.id ?? respuesta.data?.key);
+    if (!idExterno) {
       this.logger.warn('WAHA acepto el mensaje sin devolver id.');
     }
     return { idExterno };
@@ -146,6 +212,29 @@ export class WahaClient extends WhatsappGateway {
         `No se pudo leer el adjunto ${adjunto.nombre} (${clave}): ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  /**
+   * POST al canal. Autenticacion y timeout en un solo sitio: lo que la peticion de
+   * envio y su reintento sin imagen comparten, y lo que no puede divergir entre ellas.
+   */
+  private publicar<T>(
+    url: string,
+    apiKey: string,
+    ruta: string,
+    cuerpo: unknown,
+  ): Promise<{ data: T }> {
+    return firstValueFrom(
+      this.http.post<T>(`${url}/api/${ruta}`, cuerpo, {
+        headers: { 'X-Api-Key': apiKey },
+        timeout: this.config.get<number>('waha.timeoutMs'),
+      }),
+    );
+  }
+
+  /** Para el log del personal; no sale al cliente. */
+  private detalle(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   /**
@@ -197,6 +286,21 @@ export class WahaClient extends WhatsappGateway {
       );
       estado = data?.status;
     } catch (error) {
+      /**
+       * Una sesion que no existe es un problema del despliegue —el nombre no
+       * coincide—, no de este mensaje. Clasificarla como rechazo permanente mataba la
+       * fila al instante y el aviso no salia ni despues de que alguien corrigiera la
+       * variable, porque FALLIDA no se reintenta. Como canal caido reintenta cada
+       * 5 min hasta 24 h, que es la ventana que tiene el despliegue para corregirse.
+       */
+      if (
+        error instanceof AxiosError &&
+        (error.response?.status === 404 || error.response?.status === 422)
+      ) {
+        throw new CanalNoDisponibleError(
+          `La sesion ${sesion} no existe en WAHA. Revisar WAHA_SESSION.`,
+        );
+      }
       throw this.traducir(error);
     }
 

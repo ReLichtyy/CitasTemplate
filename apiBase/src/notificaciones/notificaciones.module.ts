@@ -54,6 +54,8 @@ import { WhatsappGateway } from './whatsapp.gateway.js';
           : new WhatsappLogGateway(),
     },
   ],
-  exports: [OutboxService, ConfirmacionService, AcusesService],
+  // El gateway sale del modulo desde el chatbot (11): contestar una conversacion y
+  // drenar el outbox son salidas del mismo canal.
+  exports: [OutboxService, ConfirmacionService, AcusesService, WhatsappGateway],
 })
 export class NotificacionesModule {}

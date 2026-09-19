@@ -17,7 +17,11 @@ const CAMPOS_NEGOCIO = {
   nombre: true,
   zonaHoraria: true,
   locale: true,
+  // El chatbot (11) formatea precios de menu con Intl; el simbolo sale de aqui.
+  moneda: true,
   prefijoPais: true,
+  confirmacionPorEnlace: true,
+  telefonoAdmin: true,
 } satisfies Prisma.ConfiguracionNegocioSelect;
 
 export type NegocioCacheado = Prisma.ConfiguracionNegocioGetPayload<{

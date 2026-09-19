@@ -17,8 +17,12 @@ import { LimiteIntentosGuard } from '../../common/guards/limite-intentos.guard.j
 import { Public } from '../../common/decorators/public.decorator.js';
 import { firmaCoincide } from '../../notificaciones/confirmacion.service.js';
 import { AcusesService } from '../../notificaciones/acuses.service.js';
+import {
+  MensajeEntrante,
+  ProcesadorMensajes,
+} from '../../chatbot/mensajes.port.js';
 import { EventoWahaDto } from './dto/evento-waha.dto.js';
-import { AckWhatsapp, idDeMensaje } from './waha.types.js';
+import { AckWhatsapp, idDeMensaje, telefonoDeChatId } from './waha.types.js';
 
 /**
  * El pipe global corre con `forbidNonWhitelisted`, y el evento real de WAHA trae
@@ -54,6 +58,7 @@ export class WahaWebhookController {
   constructor(
     private readonly config: ConfigService,
     private readonly acuses: AcusesService,
+    private readonly chatbot: ProcesadorMensajes,
   ) {}
 
   @Public()
@@ -108,10 +113,45 @@ export class WahaWebhookController {
       return;
     }
 
-    // `message` entrante: la confirmacion por respuesta de texto es comodidad futura y
-    // nunca el unico camino (paso 6 de 09-conexion-whatsapp.md). Adivinar cual de dos
-    // citas pendientes se confirma es peor que no responder.
+    if (tipo === 'message') {
+      await this.procesarMensaje(evento);
+      return;
+    }
+
     this.logger.debug(`Evento ${tipo} recibido y descartado.`);
+  }
+
+  /**
+   * La entrada del chatbot (11-chatbot-reservas.md). Aqui termina todo el
+   * vocabulario del canal: lo que sale hacia `ProcesadorMensajes` ya es telefono
+   * en forma local y texto — el bot no conoce `chatId`, ni `fromMe`, ni WAHA.
+   *
+   * `fromMe` primero: cada respuesta del bot genera su propio evento `message`,
+   * y sin descartarlo el bot se contesta a si mismo en un bucle que solo para
+   * con la tarifa. Un mensaje sin texto (sticker, audio) no tiene a quien
+   * entrarle: no es un error, es ruido para este flujo.
+   */
+  private async procesarMensaje(evento: EventoWahaDto): Promise<void> {
+    const payload = evento.payload;
+
+    if (payload?.fromMe) {
+      this.logger.debug('Mensaje propio (fromMe): se descarta.');
+      return;
+    }
+
+    const identidades = telefonoDeChatId(payload?.from);
+    const texto = payload?.body?.trim();
+    if (!identidades || !texto) {
+      this.logger.debug('Mensaje sin remitente utilizable o sin texto: se descarta.');
+      return;
+    }
+
+    const mensaje: MensajeEntrante = {
+      telefono: identidades.telefono,
+      destino: identidades.destino,
+      texto,
+    };
+    await this.chatbot.procesar(mensaje);
   }
 
   /**

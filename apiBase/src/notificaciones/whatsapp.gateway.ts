@@ -54,4 +54,17 @@ export abstract class WhatsappGateway {
     plantilla: TipoNotificacion,
     variables: Record<string, unknown>,
   ): Promise<ResultadoEnvio>;
+
+  /**
+   * Texto libre de conversacion, sin plantilla: la respuesta del chatbot al mensaje
+   * que acaba de llegar.
+   *
+   * No va por el outbox —quien escribe reintenta solo— y por eso tampoco sus
+   * reintentos existen: si el canal fallo, la conversacion se retoma con el
+   * siguiente mensaje del cliente. Ver 11-chatbot-reservas.md.
+   *
+   * `destino` es E.164, igual que en `enviar`: un solo contrato de destino para
+   * todo lo que sale por este puerto.
+   */
+  abstract enviarTexto(destino: string, texto: string): Promise<ResultadoEnvio>;
 }

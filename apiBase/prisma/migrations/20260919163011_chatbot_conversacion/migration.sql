@@ -1,0 +1,11 @@
+-- CreateTable
+CREATE TABLE `ConversacionChatbot` (
+    `telefono` VARCHAR(191) NOT NULL,
+    `estado` ENUM('ELIGIENDO_SERVICIO', 'ELIGIENDO_PROFESIONAL', 'ELIGIENDO_DIA', 'ELIGIENDO_HORA', 'PIDIENDO_NOMBRE', 'CONFIRMANDO') NOT NULL,
+    `datos` JSON NOT NULL,
+    `expiraEn` DATETIME(3) NOT NULL,
+    `creadaEn` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `actualizadaEn` DATETIME(3) NOT NULL,
+
+    PRIMARY KEY (`telefono`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

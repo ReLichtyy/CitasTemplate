@@ -242,13 +242,18 @@ export class CitasService {
         // Se le pasan los datos, no el id: todo lo que el aviso necesita acaba de
         // volver del INSERT o de `resolverCliente`, y releerlo eran cuatro consultas
         // mas con la transaccion abierta.
-        await this.outbox.encolarConfirmacion(tx, {
+        const aviso = {
           id: creada.id,
           inicio: creada.inicio,
           cliente,
           servicio: creada.servicio,
           empleado: creada.empleado,
-        });
+        };
+        await this.outbox.encolarConfirmacion(tx, aviso);
+        // El aviso al administrador —quien reservo, con quien, cuando— entra en la
+        // misma transaccion y drena en la misma cola: otra fila, otro tipo, el mismo
+        // worker.
+        await this.outbox.encolarAvisoReserva(tx, aviso);
 
         return creada;
       });

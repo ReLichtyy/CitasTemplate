@@ -25,4 +25,10 @@ export class WhatsappLogGateway extends WhatsappGateway {
     );
     return { idExterno: `log-${Date.now()}` };
   }
+
+  /** El chatbot se prueba contra este mismo gateway: el banco del worker y el del bot es uno. */
+  async enviarTexto(destino: string, texto: string): Promise<ResultadoEnvio> {
+    this.logger.log(`[sin canal] texto -> ${destino}\n${texto}`);
+    return { idExterno: `log-${Date.now()}` };
+  }
 }

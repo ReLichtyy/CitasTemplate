@@ -60,6 +60,15 @@ model ConfiguracionNegocio {
   /// guardado en forma local antes de mandarlo a un canal externo: un numero como
   /// "88887777" no se entrega a ningun lado. Ver 09-conexion-whatsapp.md.
   prefijoPais           String?
+  /// El "select" de la confirmacion por enlace. Activado: el aviso de la reserva
+  /// lleva el enlace firmado y el cliente confirma su cita solo. Desactivado: el
+  /// aviso es solo informativo — la cita la confirma el personal, como antes del
+  /// modulo. Ver 09-conexion-whatsapp.md.
+  confirmacionPorEnlace Boolean  @default(true)
+  /// Telefono local del administrador, al que llega el aviso de cada reserva nueva
+  /// (cliente, profesional y fecha). NULL: no se manda ningun aviso. Se entrega en
+  /// E.164 con el mismo `prefijoPais` que el resto.
+  telefonoAdmin         String?
   actualizadoEn         DateTime @updatedAt
 }
 
@@ -347,6 +356,9 @@ enum TipoNotificacion {
   CONFIRMACION_CITA
   RECORDATORIO_CITA
   CANCELACION_CITA
+  /// Al administrador del negocio, no al cliente: le avisa de cada reserva nueva
+  /// con cliente, profesional y fecha. Ver 09-conexion-whatsapp.md.
+  AVISO_RESERVA_CITA
 }
 
 enum EstadoNotificacion {
@@ -418,4 +430,35 @@ model EventoWebhook {
   canal      CanalNotificacion @default(WHATSAPP)
   tipo       String
   recibidoEn DateTime          @default(now())
+}
+
+/// Etapa del flujo de reserva por chatbot. Es estado de aplicacion, no de dominio:
+/// la cita que sale del flujo nace PENDIENTE como cualquier otra.
+enum EstadoConversacion {
+  /// El modo LLM: la conversacion no tiene etapa, el asistente decide el paso.
+  CONVERSANDO
+  ELIGIENDO_SERVICIO
+  ELIGIENDO_PROFESIONAL
+  ELIGIENDO_DIA
+  ELIGIENDO_HORA
+  PIDIENDO_NOMBRE
+  CONFIRMANDO
+}
+
+/// Conversacion de reserva por WhatsApp, una por telefono. Es el estado del flujo
+/// en curso, no un historial: lo que queda es la eleccion que se esta armando, y la
+/// expiracion la barre el proximo mensaje que llegue, sin cron. Ver
+/// src/chatbot/11-chatbot-reservas.md.
+model ConversacionChatbot {
+  /// Telefono en forma local (8 digitos): la identidad del cliente ya decidida en
+  /// SPEC.md, y aqui el dato que el canal ya trae — el bot no lo pregunta.
+  telefono      String              @id
+  estado        EstadoConversacion
+  /// Lo recogido hasta ahora: servicioId, empleadoId, inicio, nombre. Solo lo que el
+  /// paso en curso necesita; se sobrescribe al avanzar.
+  datos         Json
+  /// Inactividad: vencida, el proximo mensaje empieza de cero.
+  expiraEn      DateTime
+  creadaEn      DateTime            @default(now())
+  actualizadaEn DateTime           @updatedAt
 }

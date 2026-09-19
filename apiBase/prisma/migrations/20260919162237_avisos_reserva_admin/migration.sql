@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE `ConfiguracionNegocio` ADD COLUMN `confirmacionPorEnlace` BOOLEAN NOT NULL DEFAULT true,
+    ADD COLUMN `telefonoAdmin` VARCHAR(191) NULL;
+
+-- AlterTable
+ALTER TABLE `NotificacionSalida` MODIFY `tipo` ENUM('CONFIRMACION_CITA', 'RECORDATORIO_CITA', 'CANCELACION_CITA', 'AVISO_RESERVA_CITA') NOT NULL;

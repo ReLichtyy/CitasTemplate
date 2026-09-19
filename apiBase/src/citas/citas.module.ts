@@ -3,6 +3,8 @@ import { CitasController } from './citas.controller.js';
 import { CitasService } from './citas.service.js';
 import { CitasConfirmador } from './citas.confirmador.js';
 import { ConfirmadorCitas } from '../notificaciones/confirmador-citas.port.js';
+import { CitasReservador } from './citas.reservador.js';
+import { ReservadorCitas } from '../chatbot/reservador-citas.port.js';
 
 @Module({
   // `OutboxService` llega por NotificacionesModule, que es global: importarlo aqui
@@ -14,7 +16,9 @@ import { ConfirmadorCitas } from '../notificaciones/confirmador-citas.port.js';
     // El puerto que consume notificaciones. Se ata aqui porque la implementacion es
     // de este modulo.
     { provide: ConfirmadorCitas, useClass: CitasConfirmador },
+    // El puerto que consume el chatbot, mismo criterio que el de arriba.
+    { provide: ReservadorCitas, useClass: CitasReservador },
   ],
-  exports: [CitasService, ConfirmadorCitas],
+  exports: [CitasService, ConfirmadorCitas, ReservadorCitas],
 })
 export class CitasModule {}

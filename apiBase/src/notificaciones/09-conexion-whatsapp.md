@@ -55,8 +55,11 @@ ya se rompió.
 ## Frontera con el módulo de citas
 
 `CitasService` no conoce este módulo. No lo importa, no lo llama, no espera nada de
-él. Lo único que hace es dejar una fila en el outbox dentro de la transacción que ya
-tenía.
+él. Lo único que hace es dejar filas en el outbox dentro de la transacción que ya
+tenía: la confirmación al cliente y el aviso al administrador — quien reservó, con
+quién y cuándo, a `ConfiguracionNegocio.telefonoAdmin` (NULL: no se manda ninguno).
+El administrador es un destinatario más del mismo mecanismo: otra fila con otro
+`tipo` (`AVISO_RESERVA_CITA`), drenada por el mismo worker, sin imagen y sin enlace.
 
 Al revés sí: este módulo cambia el estado de una cita al confirmar, y lo hace pasando
 por el servicio de citas, no escribiendo la fila a mano. El invariante de
@@ -208,7 +211,33 @@ El adaptador además **pregunta por el estado de la sesión antes de mandar** (c
 15 s, porque el lote es de 20 y si no serían 20 consultas idénticas por pasada). Sin esa
 comprobación, con la sesión caída cada aviso se iba por el camino del fallo genérico.
 
+Dos decisiones más del adaptador, ambas al servicio de "el aviso sale siempre":
+
+- **Una sesión que no existe es canal caído, no rechazo del mensaje.** El GET de estado
+  responde 404/422 cuando `WAHA_SESSION` no coincide con la sesión real de WAHA, y
+  clasificarlo como permanente mataba la fila al instante —`FALLIDA` no se reintenta— con
+  el número en línea y nadie enterarse. Como `CanalNoDisponibleError` reintenta cada 5 min
+  hasta 24 h, que es la ventana que tiene el despliegue para corregir la variable.
+- **Si falla el envío con imagen, se reenvía solo texto.** La imagen de agradecimiento es
+  cortesía; el aviso es el texto con el enlace. NOWEB tiene fallos conocidos de subida de
+  medios, y un aviso que muere porque falló la decoración es exactamente lo que este
+  módulo no puede permitirse: el texto sale, y el fallo de la imagen queda en el log.
+
 ## El enlace firmado
+
+### El "select": la confirmacion por enlace es configurable
+
+`ConfiguracionNegocio.confirmacionPorEnlace` decide si el aviso de la reserva lleva el
+enlace firmado o es solo informativo:
+
+- **Activado** (por defecto): el flujo de abajo — token, enlace, pagina, POST.
+- **Desactivado**: no se emite ningun token (`TokenConfirmacion` queda en cero para esa
+  cita) y la plantilla termina en la fecha. La cita la confirma el personal desde la
+  gestion, como antes del modulo.
+
+El aviso sale en los dos casos: lo que cambia es si el cliente puede confirmarse solo.
+La bandera se lee por `CatalogoService` —configuracion cacheada 60 s— asi que
+cambiarla en la base tarda hasta un minuto en verse, sin reiniciar.
 
 ### Forma
 

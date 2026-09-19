@@ -97,11 +97,17 @@ export class OutboxService {
 
     // El token se emite aqui y no en `CitasService`: el dominio de citas encola una
     // intencion de aviso y no tiene por que saber que el aviso lleva un enlace firmado.
-    const tokenEnClaro = await this.confirmacion.emitirToken(
-      tx,
-      citaId,
-      cita.inicio,
-    );
+    //
+    // El "select" del negocio decide si ese enlace existe: sin confirmacion por enlace
+    // no se emite token y el aviso sale solo informativo — la cita la confirma el
+    // personal, como antes del modulo.
+    const enlace = negocio?.confirmacionPorEnlace
+      ? `${this.config.get<string>('notificaciones.urlPublica')}/citas/confirmar/${await this.confirmacion.emitirToken(
+          tx,
+          citaId,
+          cita.inicio,
+        )}`
+      : '';
 
     const variables = {
       nombre: [cita.cliente.nombre, cita.cliente.apellido]
@@ -120,7 +126,9 @@ export class OutboxService {
         negocio?.zonaHoraria,
         negocio?.locale,
       ),
-      enlace: `${this.config.get<string>('notificaciones.urlPublica')}/citas/confirmar/${tokenEnClaro}`,
+      // Vacio cuando el negocio desactivo la confirmacion por enlace: la plantilla
+      // omite la seccion de confirmar, y en reposo la base no guarda ningun token.
+      enlace,
     };
 
     // `skipDuplicates` es la idempotencia de @@unique([citaId, tipo]): encolar dos
@@ -132,6 +140,61 @@ export class OutboxService {
           tipo: TipoNotificacion.CONFIRMACION_CITA,
           destino,
           variables,
+        },
+      ],
+      skipDuplicates: true,
+    });
+
+    return count > 0;
+  }
+
+  /**
+   * El aviso al administrador de cada reserva nueva: quien reservo, con quien y
+   * cuando. Es el disparador que le dice al negocio que entro una cita sin mirar la
+   * agenda — la misma fila de outbox y el mismo worker que la confirmacion, solo
+   * cambia el tipo y el destino.
+   *
+   * Sin `telefonoAdmin` configurado no se encola nada y eso no es error: la reserva
+   * sigue siendo valida y la confirmacion al cliente sale igual.
+   */
+  async encolarAvisoReserva(
+    tx: Prisma.TransactionClient,
+    cita: DatosAviso,
+  ): Promise<boolean> {
+    const negocio = await this.catalogo.negocio();
+
+    const destino = aE164(negocio?.telefonoAdmin ?? '', negocio?.prefijoPais);
+    if (!destino) {
+      this.logger.warn(
+        `Cita ${cita.id}: sin telefono de administrador, no se encola aviso de reserva.`,
+      );
+      return false;
+    }
+
+    const { count } = await tx.notificacionSalida.createMany({
+      data: [
+        {
+          citaId: cita.id,
+          tipo: TipoNotificacion.AVISO_RESERVA_CITA,
+          destino,
+          variables: {
+            nombre: [cita.cliente.nombre, cita.cliente.apellido]
+              .filter(Boolean)
+              .join(' '),
+            negocio: negocio?.nombre ?? '',
+            servicio: cita.servicio.nombre,
+            profesional: [
+              cita.empleado.usuario.nombre,
+              cita.empleado.usuario.apellido,
+            ]
+              .filter(Boolean)
+              .join(' '),
+            fecha: this.formatearFecha(
+              cita.inicio,
+              negocio?.zonaHoraria,
+              negocio?.locale,
+            ),
+          },
         },
       ],
       skipDuplicates: true,

@@ -184,6 +184,7 @@ function crearPrisma() {
 function crearServicio(prisma: PrismaService) {
   const outbox = {
     encolarConfirmacion: vi.fn().mockResolvedValue(true),
+    encolarAvisoReserva: vi.fn().mockResolvedValue(true),
     // Se llama despues del commit para que el aviso no espere al sondeo del worker.
     despertarAlWorker: vi.fn(),
   };

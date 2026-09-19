@@ -14,6 +14,7 @@ Specs cortos, uno por componente. Cada archivo se lee solo cuando se toca ese co
 | 08 | `Template/src/pages/publico/08-pagina-especialistas.md` | `EquipoPage.tsx` |
 | 09 | `apiBase/src/notificaciones/09-conexion-whatsapp.md` | `notificaciones.module.ts` |
 | 10 | `apiBase/src/common/observabilidad/10-observabilidad.md` | logger, middleware de id, `telemetria/` |
+| 11 | `apiBase/src/chatbot/11-chatbot-reservas.md` | `chatbot.module.ts` |
 
 Cada spec vive en la carpeta del código que describe: abrir el módulo es encontrarlo. Este
 archivo es el único índice, y lo que un agente debe leer primero.

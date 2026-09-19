@@ -68,18 +68,22 @@ export function renderizar(
   const enlace = texto(variables, 'enlace');
 
   switch (plantilla) {
-    case TipoNotificacion.CONFIRMACION_CITA:
-      return [
+    case TipoNotificacion.CONFIRMACION_CITA: {
+      const aviso = [
         '✅ Cita reservada',
         '',
         `Hola ${nombre}, su cita en ${negocio} quedo reservada.`,
         '',
         `📅 ${servicio} con ${profesional}`,
         `🕒 ${fecha}`,
-        '',
-        'Confirmela aqui:',
-        enlace,
-      ].join('\n');
+      ];
+      // El enlace existe solo cuando el negocio activo la confirmacion por enlace
+      // (`ConfiguracionNegocio.confirmacionPorEnlace`): sin el, el aviso termina en
+      // la fecha — nada que tocar, nada que adivinar, y el personal confirma.
+      return enlace
+        ? [...aviso, '', 'Confirmela aqui:', enlace].join('\n')
+        : aviso.join('\n');
+    }
 
     case TipoNotificacion.RECORDATORIO_CITA:
       return [
@@ -98,6 +102,20 @@ export function renderizar(
         `Hola ${nombre}, su cita en ${negocio} fue cancelada.`,
         '',
         `📅 ${servicio} con ${profesional}`,
+        `🕒 ${fecha}`,
+      ].join('\n');
+
+    /**
+     * Al administrador, no al cliente: le dice quien reservo, con quien y cuando,
+     * sin abrir la agenda. Reusa las variables de la confirmacion porque la
+     * informacion es la misma cita que acaba de salir del INSERT.
+     */
+    case TipoNotificacion.AVISO_RESERVA_CITA:
+      return [
+        '📌 Nueva reserva',
+        '',
+        `${nombre} reservo ${servicio} con ${profesional}.`,
+        '',
         `🕒 ${fecha}`,
       ].join('\n');
   }
