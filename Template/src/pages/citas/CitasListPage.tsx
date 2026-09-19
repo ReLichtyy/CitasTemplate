@@ -4,6 +4,7 @@ import { ButtonLink } from '../../components/ui/ButtonLink';
 import { CARD_SHELL_CLASSES } from '../../components/ui/Card';
 import { CitaCard } from '../../components/ui/CitaCard';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { CAMPO_CLASSES } from '../../components/ui/Field';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Paginacion } from '../../components/ui/Paginacion';
 import { RANGO_VACIO, RangoFechas, type Rango } from '../../components/ui/RangoFechas';
@@ -12,8 +13,10 @@ import { useAuth } from '../../context/AuthContext';
 import { configuracionPlaceholder } from '../../lib/configuracionPlaceholder';
 import { diaLocalDeISO, formatFechaLarga, limiteDelDia } from '../../lib/formatFechaHora';
 import { esPersonal } from '../../lib/permisosCita';
+import { nombreCompleto } from '../../lib/especialista';
 import { useRecursoApi } from '../../hooks/useRecursoApi';
 import { citasService } from '../../services/citasService';
+import { empleadosService, type EmpleadoGestion } from '../../services/empleadosService';
 import type { Cita } from '../../types/cita';
 
 /**
@@ -43,15 +46,35 @@ function porDia(citas: Cita[]): { dia: string; citas: Cita[] }[] {
  *
  * Una sola pagina para los tres roles: **el recorte lo hace el servidor**, no esta
  * pantalla. `GET /citas` aplica `filtroPorPropiedad` y devuelve las del cliente, la agenda
- * del empleado o todas si es admin. Aqui lo unico que cambia con el rol es de quien se
- * pinta el nombre en cada fila, que es presentacion. Ver `03-autorizacion.md`.
+ * del empleado o todas si es admin. Del rol depende la presentacion (de quien se pinta el
+ * nombre en cada fila) y, para el ADMIN, el filtro de profesional: es el unico que ve citas
+ * ajenas a la propia agenda, y `empleadoId` es el parametro que el API le ofrece para
+ * estrecharlas. Ver `03-autorizacion.md`.
  */
 export function CitasListPage() {
   const { rol } = useAuth();
   const { moneda, locale } = configuracionPlaceholder;
+  const esAdmin = rol === 'ADMIN';
 
   const [rango, setRango] = useState<Rango>(RANGO_VACIO);
+  const [empleadoId, setEmpleadoId] = useState('');
   const [pagina, setPagina] = useState(0);
+
+  // El equipo completo, no el catalogo publico: un empleado dado de baja conserva su
+  // historial de citas y el ADMIN filtra tambien sobre el. La ruta es `@Roles(ADMIN)`,
+  // asi que solo se pide cuando este rol es el que mira la pagina.
+  const cargarEmpleados = useCallback(
+    () =>
+      esAdmin
+        ? empleadosService.listarGestion()
+        : Promise.resolve<EmpleadoGestion[]>([]),
+    [esAdmin],
+  );
+  const {
+    datos: empleados,
+    cargando: cargandoEmpleados,
+    error: errorEmpleados,
+  } = useRecursoApi(cargarEmpleados, [esAdmin]);
 
   // `useRecursoApi` lee `cargar` una vez por juego de `deps`, asi que la funcion se
   // memoriza con exactamente lo que consulta y las deps repiten esos mismos valores.
@@ -65,16 +88,30 @@ export function CitasListPage() {
         // 8" dejaria fuera todas las citas del 8.
         ...(rango.desde ? { desde: limiteDelDia(rango.desde, 'desde') } : {}),
         ...(rango.hasta ? { hasta: limiteDelDia(rango.hasta, 'hasta') } : {}),
+        // Solo lo pinta el ADMIN: a un EMPLEADO el servidor ya le recorta su agenda por
+        // propiedad, y el `where` combina este filtro con esa por AND.
+        ...(esAdmin && empleadoId ? { empleadoId } : {}),
       }),
-    [pagina, rango.desde, rango.hasta],
+    [pagina, rango.desde, rango.hasta, esAdmin, empleadoId],
   );
 
-  const { datos, cargando, error } = useRecursoApi(cargar, [pagina, rango.desde, rango.hasta]);
+  const { datos, cargando, error } = useRecursoApi(cargar, [
+    pagina,
+    rango.desde,
+    rango.hasta,
+    esAdmin,
+    empleadoId,
+  ]);
 
   // Cambiar el filtro reinicia la paginacion: quedarse en la pagina 3 de un rango que
   // ahora tiene una sola es una lista vacia que parece un fallo.
   const cambiarRango = (siguiente: Rango) => {
     setRango(siguiente);
+    setPagina(0);
+  };
+
+  const cambiarEmpleado = (id: string) => {
+    setEmpleadoId(id);
     setPagina(0);
   };
 
@@ -92,13 +129,39 @@ export function CitasListPage() {
         }
       />
 
-      <RangoFechas
-        valor={rango}
-        onCambiar={cambiarRango}
-        onLimpiar={() => cambiarRango(RANGO_VACIO)}
-        deshabilitado={cargando}
-      />
+      <div className="flex flex-col gap-2">
+        <RangoFechas
+          valor={rango}
+          onCambiar={cambiarRango}
+          onLimpiar={() => cambiarRango(RANGO_VACIO)}
+          deshabilitado={cargando}
+        />
+        {/* El filtro de profesional es solo del ADMIN: un EMPLEADO ya recibe su propia
+            agenda por propiedad y pedir la de otro no le regala nada (el servidor combina
+            los dos `where` por AND). Select nativo con `CAMPO_CLASSES`, el mismo patron de
+            los formularios de gestion — no hay libreria de componentes en este proyecto,
+            y "Todos" es el neutro que hace de boton de limpiar. */}
+        {esAdmin && (
+          <label className="flex w-full max-w-80 flex-col gap-1 text-sm text-text">
+            Profesional
+            <select
+              value={empleadoId}
+              disabled={cargando || cargandoEmpleados}
+              onChange={(evento) => cambiarEmpleado(evento.target.value)}
+              className={CAMPO_CLASSES}
+            >
+              <option value="">Todos</option>
+              {(empleados ?? []).map((empleado) => (
+                <option key={empleado.id} value={empleado.id}>
+                  {nombreCompleto(empleado.usuario.nombre, empleado.usuario.apellido)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
 
+      {errorEmpleados && <Alert>{errorEmpleados}</Alert>}
       {error && <Alert>{error}</Alert>}
 
       {cargando && (
@@ -120,10 +183,12 @@ export function CitasListPage() {
 
       {!cargando && !error && datos?.items.length === 0 && (
         <EmptyState
-          title={rango.desde || rango.hasta ? 'Sin citas en ese rango' : 'Todavia no hay citas'}
+          title={
+            rango.desde || rango.hasta || empleadoId ? 'Sin citas con esos filtros' : 'Todavia no hay citas'
+          }
           description={
-            rango.desde || rango.hasta
-              ? 'Pruebe con otras fechas o limpie el filtro.'
+            rango.desde || rango.hasta || empleadoId
+              ? 'Pruebe con otros filtros o limpielos.'
               : vistaDelNegocio
                 ? 'Cuando alguien reserve, la cita aparece aqui.'
                 : 'Sus reservas van a aparecer aqui.'

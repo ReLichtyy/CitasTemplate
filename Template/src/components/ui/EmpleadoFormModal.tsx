@@ -18,7 +18,8 @@ const MAX = { nombre: 100, apellido: 100, email: 160, bio: 2000, password: 72 };
 
 const PASSWORD_MIN = 8;
 
-const TELEFONO = /^\+?[\d\s()-]{7,20}$/;
+/** Forma local: 8 digitos, sin prefijo de pais. Igual que el DTO del API. */
+const TELEFONO = /^\d{8}$/;
 
 type Formulario = {
   telefono: string;
@@ -125,7 +126,7 @@ export function EmpleadoFormModal({
     }));
 
   const problemas = {
-    telefono: TELEFONO.test(form.telefono) ? null : 'El telefono no tiene un formato valido.',
+    telefono: TELEFONO.test(form.telefono) ? null : 'El telefono debe tener 8 digitos.',
     nombre: form.nombre.trim().length < 2 ? 'El nombre es obligatorio.' : null,
     password:
       form.password === '' || form.password.length >= PASSWORD_MIN
@@ -203,10 +204,10 @@ export function EmpleadoFormModal({
         <div className="flex flex-wrap gap-3">
           <Field
             label="Telefono"
-            inputMode="tel"
-            placeholder="+506 8888 7777"
+            inputMode="numeric"
+            placeholder="8888 7777"
             value={form.telefono}
-            maxLength={20}
+            maxLength={8}
             disabled={ocupado}
             wrapperClassName="min-w-40 flex-1"
             hint={
@@ -220,7 +221,9 @@ export function EmpleadoFormModal({
                 </span>
               )
             }
-            onChange={(evento) => campo('telefono', evento.target.value)}
+            onChange={(evento) =>
+              campo('telefono', evento.target.value.replace(/\D/g, ''))
+            }
           />
           <Field
             label="Correo"

@@ -1,6 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
 import { LandingPage } from './pages/publico/LandingPage';
-import { ServiciosPage } from './pages/publico/ServiciosPage';
 import { EquipoPage } from './pages/publico/EquipoPage';
 import { GaleriaPage } from './pages/publico/GaleriaPage';
 import { ProductosPage } from './pages/publico/ProductosPage';
@@ -37,7 +36,8 @@ function App() {
       <Route element={<AppLayout />}>
         {/* publico */}
         <Route path="/" element={<LandingPage />} />
-        <Route path="/servicios" element={<ServiciosPage />} />
+        {/* El catalogo publico de servicios no tiene ruta propia: es la seccion
+            `#servicios` de `/equipo`. */}
         <Route path="/equipo" element={<EquipoPage />} />
         <Route path="/galeria" element={<GaleriaPage />} />
         <Route path="/productos" element={<ProductosPage />} />

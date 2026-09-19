@@ -34,7 +34,12 @@ export function RegisterPage() {
 
   const cambiar = (campo: keyof typeof FORMULARIO_VACIO) => (evento: { target: { value: string } }) => {
     setDesajuste(null);
-    setDatos((previos) => ({ ...previos, [campo]: evento.target.value }));
+    setDatos((previos) => ({
+      ...previos,
+      // El telefono es la identidad y se guarda en forma local: solo digitos.
+      [campo]:
+        campo === 'telefono' ? evento.target.value.replace(/\D/g, '') : evento.target.value,
+    }));
   };
 
   async function enviar(evento: FormEvent) {
@@ -86,6 +91,8 @@ export function RegisterPage() {
             required
             autoComplete="tel"
             autoFocus
+            inputMode="numeric"
+            maxLength={8}
             placeholder="8888 8888"
             hint="Es su usuario para entrar. Si ya reservo con este numero, la cuenta se queda con esas citas."
             value={datos.telefono}

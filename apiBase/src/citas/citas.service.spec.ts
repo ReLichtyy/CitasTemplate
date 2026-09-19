@@ -378,7 +378,7 @@ describe('CitasService.reservar sin sesion', () => {
 
     const { data } = tx.usuario.create.mock.calls[0][0];
     // Sin normalizar, el mismo numero escrito de otra forma crearia un cliente nuevo.
-    expect(data.telefono).toBe('+50688888888');
+    expect(data.telefono).toBe('88888888');
     expect(data.nombre).toBe('Ana');
     expect(data.password).toBeUndefined();
 

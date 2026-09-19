@@ -270,10 +270,12 @@ Dos cosas bloquean el envío y viven en `01-modelo-datos.md`:
   guardarlo. Sin opt-in explícito no se manda nada: es política de WhatsApp, y es lo
   que sostiene la reputación del número. Necesita también su casilla en
   `ReservarPage`.
-- **`ConfiguracionNegocio.prefijoPais`.** `normalizarTelefono` conserva el `+` solo
-  si venía, y el DTO acepta siete dígitos. Un número guardado como `88887777` no se
-  entrega a ningún lado. El prefijo por despliegue es lo coherente con que el
-  producto sea genérico y multipaís.
+- **`ConfiguracionNegocio.prefijoPais`.** El teléfono se guarda en forma local,
+  de 8 dígitos y sin prefijo de país: `normalizarTelefono` le quita el `506` a lo
+  que lo trae, y es `aE164` quien le antepone el prefijo al entregar el número a un
+  canal externo. Sin `prefijoPais` configurado, un `88887777` no se entrega a
+  ningún lado. El prefijo por despliegue es lo coherente con que el producto sea
+  genérico y multipaís.
 
 Los dos se pueden hacer hoy, sin depender de WhatsApp.
 
@@ -526,8 +528,9 @@ curl -X POST http://localhost:3001/api/sendText \
 
 El `chatId` es **el número internacional sin `+`, con `@c.us` pegado atrás**.
 
-Esto conecta directo con el hueco que ya señalaba la spec: `normalizarTelefono`
-conserva el `+` solo si venía, y el DTO acepta siete dígitos. Un `88887777` produce
+Esto conecta directo con el hueco que ya señalaba la spec: el teléfono se guarda
+en forma local, de 8 dígitos, y es `aE164` quien le antepone
+`ConfiguracionNegocio.prefijoPais`. Sin prefijo configurado, un `88887777` produce
 `88887777@c.us`, que no es nadie. **`ConfiguracionNegocio.prefijoPais` no es un
 adorno: sin él este módulo no entrega un solo mensaje.**
 

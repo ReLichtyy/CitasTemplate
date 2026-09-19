@@ -31,6 +31,8 @@ ninguna queda sin declarar autenticación.
 |---|---|
 | Login, registro, `/health` | `@Public()` |
 | Catálogo público: `/servicios`, `/servicios/:id`, `/empleados`, `/configuracion` | `@Public()`, solo registros `activo` y solo campos públicos |
+| Galería de fotos de resultados: `GET /galeria` | `@Public()`, solo fotos de servicios publicados; la foto es contenido publicado, no tiene borrador |
+| Agregar y quitar fotos de la galería (`POST`/`DELETE /galeria`), subir imágenes (`/archivos`) | `ADMIN`, `EMPLEADO` — quien atiende es quien tiene el resultado en las manos |
 | Listado completo de citas y agenda diaria | `ADMIN`, `EMPLEADO` |
 | Detalle y cancelación de una cita | Los tres roles, solo la propia |
 | Edición y cambio de estado | `ADMIN`, `EMPLEADO`, solo la propia |

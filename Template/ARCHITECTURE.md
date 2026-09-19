@@ -53,9 +53,9 @@ Componentes/paginas nunca llaman `fetch` ni `apiClient` directo — siempre a tr
 
 Este frontend es generico a cualquier negocio de citas/reservas (salon, clinica, consultoria, etc.), no a un servicio en especifico. No hardcodear copy ni secciones atadas a un rubro puntual — el Home, el navbar y las paginas publicas deben funcionar igual sin importar que tipo de "servicio" se agende.
 
-Navbar publico (siempre visible, sin gate): **Inicio** (`/`), **Equipo** (`/equipo`), **Reservar** (`/citas/reservar`). `Servicios` no tiene link propio en el nav — spec 07 muestra los servicios anidados por especialista dentro de `/equipo`, y `/servicios` (catalogo completo) sigue existiendo como ruta, solo que no colgada del nav. `Reservar` cuelga de `ProtectedRoute`, asi que a un invitado lo manda a `/auth/login` — es el comportamiento esperado, no un bug. Bajo `md` los links colapsan en un menu hamburguesa (`Navbar.tsx`).
+Navbar publico (siempre visible, sin gate): **Inicio** (`/`), **Equipo** (`/equipo`), **Reservar** (`/citas/reservar`). El catalogo publico de servicios no tiene pagina propia: es la seccion `#servicios` de `/equipo` (el `BottomNav` del telefono lleva a ella con su pestaña "Servicios"). `Reservar` cuelga de `ProtectedRoute`, asi que a un invitado lo manda a `/auth/login` — es el comportamiento esperado, no un bug. Bajo `md` los links colapsan en un menu hamburguesa (`Navbar.tsx`).
 
-`pages/publico/ServiciosPage.tsx` es el catalogo publico de servicios (para cualquier visitante). Es una pagina distinta de `pages/gestion/servicios/ServiciosListPage.tsx`, que es la vista de administracion (alta/edicion, solo admin/empleado). No fusionar ambas — sirven audiencias y permisos distintos aunque el dominio de datos sea el mismo.
+La vista de administracion de servicios es `pages/gestion/servicios/ServiciosListPage.tsx` (alta/edicion, solo admin/empleado), distinta de la seccion publica de `/equipo`. No fusionar ambas — sirven audiencias y permisos distintos aunque el dominio de datos sea el mismo.
 
 ## Flujo de Reservar (pendiente de backend)
 

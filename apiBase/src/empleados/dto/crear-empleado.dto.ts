@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   ArrayUnique,
   IsArray,
@@ -10,6 +11,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { aTelefonoLocal } from '../../common/telefono.js';
 import {
   PASSWORD_MAX,
   PASSWORD_MIN,
@@ -28,6 +30,7 @@ import {
  */
 export class CrearEmpleadoDto {
   @IsString({ message: 'El telefono debe ser texto.' })
+  @Transform(aTelefonoLocal)
   @Matches(TELEFONO_REGEX, { message: TELEFONO_MENSAJE })
   telefono!: string;
 

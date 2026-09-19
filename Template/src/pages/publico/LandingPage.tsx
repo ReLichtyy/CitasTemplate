@@ -10,6 +10,7 @@ import { configuracionPlaceholder } from '../../lib/configuracionPlaceholder';
 import { construirGaleria } from '../../lib/galeria';
 import { formatPrice } from '../../lib/formatPrice';
 import { empleadosService } from '../../services/empleadosService';
+import { galeriaService } from '../../services/galeriaService';
 import { serviciosService } from '../../services/serviciosService';
 
 // Copy de la pagina, no configuracion del negocio: no existe como campo en
@@ -200,14 +201,23 @@ function ComoReservar() {
 function TrabajosDestacados() {
   const { terminoServicioPlural, terminoEmpleadoPlural } = configuracionPlaceholder;
   const servicios = useRecursoApi(() => serviciosService.list());
+  const fotos = useRecursoApi(() => galeriaService.list());
   const empleados = useRecursoApi(() => empleadosService.list());
 
-  if (servicios.cargando || empleados.cargando || servicios.error || empleados.error) {
+  if (
+    servicios.cargando ||
+    fotos.cargando ||
+    empleados.cargando ||
+    servicios.error ||
+    fotos.error ||
+    empleados.error
+  ) {
     return null;
   }
 
   const items = construirGaleria(
     servicios.datos ?? [],
+    fotos.datos ?? [],
     empleados.datos ?? [],
     terminoServicioPlural,
     terminoEmpleadoPlural,
@@ -279,7 +289,7 @@ function CierreCTA() {
           <ButtonLink to="/citas/reservar" className="w-full sm:w-auto">
             Agendar Cita
           </ButtonLink>
-          <ButtonLink to="/servicios" variant="secondary" className="w-full sm:w-auto">
+          <ButtonLink to="/equipo#servicios" variant="secondary" className="w-full sm:w-auto">
             Ver servicios
           </ButtonLink>
         </div>

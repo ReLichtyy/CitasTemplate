@@ -1,18 +1,26 @@
+import { Transform } from 'class-transformer';
 import { IsString, Matches, MaxLength } from 'class-validator';
+import {
+  TELEFONO_MENSAJE,
+  TELEFONO_REGEX,
+  aTelefonoLocal,
+} from '../../common/telefono.js';
 
 /** bcrypt solo mira los primeros 72 bytes; aceptar mas es prometer una fuerza que no da. */
 export const PASSWORD_MAX = 72;
 export const PASSWORD_MIN = 8;
 
-/**
- * El telefono no se valida contra un pais: el template se despliega donde sea. Solo se
- * exige la forma que `normalizarTelefono` sabe reducir a una sola representacion.
- */
-export const TELEFONO_REGEX = /^\+?[\d\s()-]{7,20}$/;
-export const TELEFONO_MENSAJE = 'El telefono no tiene un formato valido.';
+export { TELEFONO_MENSAJE, TELEFONO_REGEX } from '../../common/telefono.js';
 
+/**
+ * El telefono se guarda en forma local: 8 digitos. Se acepta tambien lo que trae
+ * el prefijo nacional delante ("506...", "+506 ...") y se le quita antes del match,
+ * que las cuentas existentes lo traian y quien ya lo escribia asi no choca de
+ * frente con la regla nueva.
+ */
 export class LoginDto {
   @IsString()
+  @Transform(aTelefonoLocal)
   @Matches(TELEFONO_REGEX, { message: TELEFONO_MENSAJE })
   telefono!: string;
 

@@ -21,6 +21,7 @@ import { AdicionalesModule } from './adicionales/adicionales.module.js';
 import { ProductosModule } from './productos/productos.module.js';
 import { EspecialidadesModule } from './especialidades/especialidades.module.js';
 import { ArchivosModule } from './archivos/archivos.module.js';
+import { GaleriaModule } from './galeria/galeria.module.js';
 import { NotificacionesModule } from './notificaciones/notificaciones.module.js';
 import { WahaModule } from './integrations/waha/waha.module.js';
 
@@ -41,6 +42,7 @@ import { WahaModule } from './integrations/waha/waha.module.js';
     ProductosModule,
     EspecialidadesModule,
     ArchivosModule,
+    GaleriaModule,
     NotificacionesModule,
     WahaModule,
     TelemetriaModule,

@@ -61,11 +61,16 @@ export function LoginPage() {
           required
           autoComplete="tel"
           autoFocus
+          inputMode="numeric"
+          maxLength={8}
           placeholder="8888 8888"
           value={credenciales.telefono}
           disabled={entrar.enviando}
           onChange={(evento) =>
-            setCredenciales((datos) => ({ ...datos, telefono: evento.target.value }))
+            setCredenciales((datos) => ({
+              ...datos,
+              telefono: evento.target.value.replace(/\D/g, ''),
+            }))
           }
         />
         <Field

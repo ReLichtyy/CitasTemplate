@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import {
   ArrayUnique,
   IsArray,
@@ -13,6 +13,11 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import {
+  TELEFONO_MENSAJE,
+  TELEFONO_REGEX,
+  aTelefonoLocal,
+} from '../../common/telefono.js';
 
 /**
  * Quien reserva sin sesion. El telefono es la identidad del cliente en este producto
@@ -21,9 +26,8 @@ import {
  */
 export class DatosClienteDto {
   @IsString({ message: 'El telefono debe ser texto.' })
-  @Matches(/^\+?[\d\s()-]{7,20}$/, {
-    message: 'El telefono no tiene un formato valido.',
-  })
+  @Transform(aTelefonoLocal)
+  @Matches(TELEFONO_REGEX, { message: TELEFONO_MENSAJE })
   telefono!: string;
 
   @IsString({ message: 'El nombre debe ser texto.' })

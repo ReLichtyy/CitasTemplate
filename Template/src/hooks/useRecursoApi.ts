@@ -10,7 +10,7 @@ export type RecursoApi<T> = {
 
 /**
  * Una lectura del API con sus tres estados. Existe porque el catalogo publico se pide
- * desde tres lugares (`EquipoPage` dos veces, `ServiciosPage` una) y repetir el
+ * desde varias paginas (`LandingPage` tres veces, `EquipoPage` dos) y repetir el
  * `useEffect` en cada uno es donde se cuelan los errores: la peticion que no se cancela al
  * desmontar, el `cargando` que se queda encendido cuando falla.
  *

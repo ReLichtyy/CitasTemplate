@@ -552,9 +552,14 @@ export function ReservarPage() {
                 type="tel"
                 required
                 autoComplete="tel"
+                inputMode="numeric"
+                maxLength={8}
                 value={contacto.telefono}
                 onChange={(evento) =>
-                  setContactoEditado({ ...contacto, telefono: evento.target.value })
+                  setContactoEditado({
+                    ...contacto,
+                    telefono: evento.target.value.replace(/\D/g, ''),
+                  })
                 }
                 placeholder="8888 8888"
                 className={CAMPO_CLASSES}

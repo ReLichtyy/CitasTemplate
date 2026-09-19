@@ -71,7 +71,7 @@ export function EmpleadoDetallePage() {
               <ul className="flex flex-col gap-2">
                 {empleado.servicios.map((servicio) => (
                   <li key={servicio.id} className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className="text-text-h">{servicio.nombre}</span>
+                    <span className="min-w-0 truncate text-text-h">{servicio.nombre}</span>
                     <span className="shrink-0 text-text-muted">
                       {formatDuration(servicio.duracionMinutos)} ·{' '}
                       <span className="font-medium tabular-nums text-price">

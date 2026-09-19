@@ -41,10 +41,10 @@ export function ServicioCard({ servicio, moneda, locale, onSelect }: ServicioCar
           <CardDetailIcon />
         </div>
         <div className="mt-auto flex items-baseline justify-between gap-3">
-          <span className="whitespace-nowrap text-sm text-text-muted">
+          <span className="min-w-0 truncate text-sm text-text-muted">
             {formatDuration(duracionMinutos)}
           </span>
-          <span className="whitespace-nowrap text-lg font-bold tabular-nums text-price">
+          <span className="shrink-0 whitespace-nowrap text-lg font-bold tabular-nums text-price">
             {formatPrice(precio, moneda, locale)}
           </span>
         </div>

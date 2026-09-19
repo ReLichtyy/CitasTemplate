@@ -1,4 +1,6 @@
+import { Transform } from 'class-transformer';
 import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { aTelefonoLocal } from '../../common/telefono.js';
 import {
   PASSWORD_MAX,
   PASSWORD_MIN,
@@ -13,6 +15,7 @@ import {
  */
 export class RegistroDto {
   @IsString()
+  @Transform(aTelefonoLocal)
   @Matches(TELEFONO_REGEX, { message: TELEFONO_MENSAJE })
   telefono!: string;
 

@@ -26,8 +26,9 @@ import { ArchivosService } from './archivos.service.js';
 const TAMANO_MAX = 4 * 1024 * 1024;
 
 /**
- * Imagenes del catalogo: subirlas es de ADMIN (escribir el catalogo), leerlas es publico —
- * un `<img>` no lleva token y la foto de un servicio ya sale en el catalogo publico.
+ * Imagenes del catalogo: subirlas es del personal (ADMIN escribe el catalogo, EMPLEADO
+ * agrega fotos de resultados a la galeria), leerlas es publico — un `<img>` no lleva
+ * token y la foto de un servicio ya sale en el catalogo publico.
  */
 @Controller('archivos')
 @UseFilters(ErrorDeMulterFilter)
@@ -40,7 +41,7 @@ export class ArchivosController {
    * `X-Forwarded-Proto`, y `trust proxy` esta activo en main.ts). Es lo que se guarda en
    * `imagenUrl`/`fotoUrl`, y quien lo guarda no tiene que saber de origenes.
    */
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.EMPLEADO)
   @Post()
   @UseInterceptors(
     FileInterceptor('archivo', {
@@ -75,10 +76,10 @@ export class ArchivosController {
   /**
    * Deshace una subida: el frontend sube la imagen recien al guardar el recurso que la
    * referencia, y si ese guardado falla (un 409, una caida), esta es la que evita que la
-   * URL sin dueno quede ocupando disco. De ADMIN, igual que subirla. 204 tanto si el
+   * URL sin dueno quede ocupando disco. Del personal, igual que subirla. 204 tanto si el
    * archivo estaba como si ya se habia ido: borrar dos veces lo mismo no es un error.
    */
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.EMPLEADO)
   @Delete(':nombre')
   @HttpCode(HttpStatus.NO_CONTENT)
   async eliminar(@Param('nombre') nombre: string) {

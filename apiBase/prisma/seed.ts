@@ -114,7 +114,7 @@ const avatar = (estilo: string, semilla: string, fondo: string) =>
 const USUARIOS = [
   {
     id: '11111111-1111-4111-8111-000000000001',
-    telefono: '50600000001',
+    telefono: '00000001',
     nombre: 'Admin',
     apellido: 'Del Negocio',
     rol: 'ADMIN' as const,
@@ -127,42 +127,42 @@ const USUARIOS = [
    */
   {
     id: '11111111-1111-4111-8111-000000000007',
-    telefono: '50660255433',
+    telefono: '60255433',
     nombre: 'Administrador',
     apellido: null,
     rol: 'ADMIN' as const,
   },
   {
     id: '11111111-1111-4111-8111-000000000002',
-    telefono: '50600000002',
+    telefono: '00000002',
     nombre: 'Ana',
     apellido: 'Rojas',
     rol: 'EMPLEADO' as const,
   },
   {
     id: '11111111-1111-4111-8111-000000000003',
-    telefono: '50600000003',
+    telefono: '00000003',
     nombre: 'Bruno',
     apellido: 'Mora',
     rol: 'EMPLEADO' as const,
   },
   {
     id: '11111111-1111-4111-8111-000000000004',
-    telefono: '50600000004',
+    telefono: '00000004',
     nombre: 'Carla',
     apellido: 'Vega',
     rol: 'CLIENTE' as const,
   },
   {
     id: '11111111-1111-4111-8111-000000000005',
-    telefono: '50600000005',
+    telefono: '00000005',
     nombre: 'Diana',
     apellido: 'Solis',
     rol: 'EMPLEADO' as const,
   },
   {
     id: '11111111-1111-4111-8111-000000000006',
-    telefono: '50600000006',
+    telefono: '00000006',
     nombre: 'Erik',
     apellido: null,
     rol: 'EMPLEADO' as const,

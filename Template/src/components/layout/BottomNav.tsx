@@ -1,5 +1,5 @@
 import { useId, useState, type ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ButtonLink } from '../ui/ButtonLink';
 import { Dialogo } from '../ui/Dialogo';
@@ -81,10 +81,28 @@ type Tab = { to: string; label: string; end?: boolean; icon: ReactNode };
 
 const TABS: Tab[] = [
   { to: '/', label: 'Inicio', end: true, icon: <IconoInicio /> },
-  { to: '/servicios', label: 'Servicios', icon: <IconoServicios /> },
+  // "Servicios" no es una pagina propia: es la seccion `#servicios` de `/equipo`, que ya
+  // trae el catalogo. El ancla hace que la pestaña aterrice directamente en esa seccion.
+  { to: '/equipo#servicios', label: 'Servicios', icon: <IconoServicios /> },
   { to: '/equipo', label: 'Equipo', icon: <IconoEquipo /> },
   { to: '/citas/reservar', label: 'Reservar', icon: <IconoReservar /> },
 ];
+
+/**
+ * La pestaña activa la decide esto y no NavLink a proposito: "Servicios" y "Equipo"
+ * comparten pathname (`/equipo`) y el `isActive` de NavLink solo compara el pathname,
+ * asi que encendia las dos a la vez. El hash las distingue — y con el tambien el
+ * `aria-current`, que NavLink habria puesto en las dos.
+ */
+function esTabActiva(tab: Tab, pathname: string, hash: string): boolean {
+  if (tab.to === '/equipo') {
+    return pathname === '/equipo' && hash !== '#servicios';
+  }
+  if (tab.to === '/equipo#servicios') {
+    return pathname === '/equipo' && hash === '#servicios';
+  }
+  return tab.end ? pathname === tab.to : pathname.startsWith(tab.to);
+}
 
 const FILA_CLASSES =
   'flex min-h-13 w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 text-left text-sm font-medium text-text-h no-underline transition-colors hover:border-accent-border hover:bg-accent-bg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border';
@@ -100,6 +118,7 @@ const FILA_CLASSES =
  */
 export function BottomNav() {
   const { isAuthenticated, rol } = useAuth();
+  const { pathname, hash } = useLocation();
   const [masAbierto, setMasAbierto] = useState(false);
   const tituloId = useId();
   const isGestion = rol === 'ADMIN' || rol === 'EMPLEADO';
@@ -112,17 +131,24 @@ export function BottomNav() {
         aria-label="Navegacion principal"
         className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-surface/96 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
       >
-        {TABS.map(({ to, label, end, icon }) => (
-          <NavLink key={to} to={to} end={end} onClick={cerrarMas} className="no-underline">
-            {({ isActive }) => (
-              <span className={TAB_CLASSES(isActive)}>
-                {icon}
-                <span className="text-[11px] font-medium">{label}</span>
-                <Punto activo={isActive} />
+        {TABS.map((tab) => {
+          const activa = esTabActiva(tab, pathname, hash);
+          return (
+            <Link
+              key={tab.to}
+              to={tab.to}
+              onClick={cerrarMas}
+              aria-current={activa ? 'page' : undefined}
+              className="no-underline"
+            >
+              <span className={TAB_CLASSES(activa)}>
+                {tab.icon}
+                <span className="text-[11px] font-medium">{tab.label}</span>
+                <Punto activo={activa} />
               </span>
-            )}
-          </NavLink>
-        ))}
+            </Link>
+          );
+        })}
         <button
           type="button"
           onClick={() => setMasAbierto(true)}

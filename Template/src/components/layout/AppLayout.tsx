@@ -1,9 +1,36 @@
-import { Outlet } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { Footer } from './Footer';
 import { BottomNav } from './BottomNav';
 
 export function AppLayout() {
+  const { pathname, hash, key } = useLocation();
+  const tipoNavegacion = useNavigationType();
+
+  // Navegar no scrollea solo: `pushState` ni sube la pagina ni dispara el salto de hash
+  // del navegador. Tocar un link del navbar debe arrancar la pagina de arriba —salvo que
+  // el link traiga ancla (`/equipo#servicios`), que entonces baja hasta su seccion; el
+  // `scroll-mt-24` del propio ancla deja el aire de la navbar fija. El atras/adelante del
+  // navegador (POP) se queda fuera: el navegador ya restaura la posicion que tenia esa
+  // entrada del historial, y sobreescribirla a top perderia el lugar del usuario. El
+  // deslizamiento sale de `scroll-behavior: smooth` de la hoja (ya responde a
+  // `prefers-reduced-motion`).
+  //
+  // `key` en las deps porque tocar el link de la pagina en la que ya se esta tambien
+  // tiene que subir: react-router navega igual (con replace), pero `pathname` y `hash`
+  // no cambian, asi que sin la key el efecto no correria y el clic quedaria muerto.
+  useEffect(() => {
+    if (tipoNavegacion === 'POP') {
+      return;
+    }
+    if (hash !== '') {
+      document.getElementById(hash.slice(1))?.scrollIntoView();
+      return;
+    }
+    window.scrollTo(0, 0);
+  }, [key, pathname, hash, tipoNavegacion]);
+
   return (
     <div className="flex min-h-dvh flex-col">
       <Navbar />

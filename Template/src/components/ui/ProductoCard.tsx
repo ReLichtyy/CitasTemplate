@@ -44,8 +44,8 @@ export function ProductoCard({ producto, moneda, locale, onSelect }: ProductoCar
           <CardDetailIcon />
         </div>
         <div className="mt-auto flex items-baseline justify-between gap-3">
-          <span className="whitespace-nowrap text-xs text-text-muted sm:text-sm">{presentacion}</span>
-          <span className="whitespace-nowrap text-base font-bold tabular-nums text-price sm:text-lg">
+          <span className="min-w-0 truncate text-xs text-text-muted sm:text-sm">{presentacion}</span>
+          <span className="shrink-0 whitespace-nowrap text-base font-bold tabular-nums text-price sm:text-lg">
             {formatPrice(precio, moneda, locale)}
           </span>
         </div>

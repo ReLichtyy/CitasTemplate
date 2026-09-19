@@ -150,8 +150,32 @@ model Servicio {
   imagenUrl       String?
   activo          Boolean @default(true)
 
-  empleados Empleado[] @relation("EmpleadoServicios")
-  citas     Cita[]
+  empleados    Empleado[]   @relation("EmpleadoServicios")
+  citas        Cita[]
+  fotosGaleria FotoGaleria[]
+}
+
+/// Foto de un resultado, agregada por el personal a la galeria publica con el servicio
+/// que la produjo.
+///
+/// A diferencia de un servicio o un producto, esta fila **es** el contenido: no la cita
+/// ningun historial y no tiene indicador de publicacion — existir es estar publicada.
+/// Por eso `DELETE /galeria/:id` borra de verdad (fila y archivo), en vez de desactivar:
+/// una foto despublicada seria invisible e inaccesible, o sea una fila muerta.
+model FotoGaleria {
+  id          String   @id @default(uuid())
+  imagenUrl   String
+  /// Pie opcional de la foto. La pagina lo muestra sobre el nombre del servicio.
+  descripcion String?  @db.VarChar(200)
+  servicioId  String
+  creadoEn    DateTime @default(now())
+
+  servicio Servicio @relation(fields: [servicioId], references: [id])
+
+  /// La galeria publica siempre lee "las fotos de servicios publicados, la mas reciente
+  /// primero": la foto de un servicio despublicado no puede llevar a un catalogo que el
+  /// visitante no ve.
+  @@index([servicioId, creadoEn])
 }
 
 /// Complemento que suma costo pero nunca duracion.

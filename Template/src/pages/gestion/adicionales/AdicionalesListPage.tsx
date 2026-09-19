@@ -95,7 +95,7 @@ export function AdicionalesListPage() {
       acciones={
         esAdmin && (
           <Button
-            className="shrink-0 px-4 py-2 text-xs sm:px-6 sm:py-3 sm:text-sm"
+            className="min-h-11 shrink-0 px-4 py-2 text-xs sm:px-6 sm:py-3 sm:text-sm"
             onClick={() => {
               guardar.limpiarError();
               setEdicion('nuevo');
@@ -119,57 +119,6 @@ export function AdicionalesListPage() {
                 <Skeleton className="h-3 w-1/4" />
               </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {!adicionales.cargando && !adicionales.error && lista.length === 0 && (
-        <EmptyState
-          title="Sin adicionales"
-          description="Agregue el primero con el boton de arriba."
-        />
-      )}
-
-      {!adicionales.cargando && lista.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {lista.map((adicional) => (
-            <GestionItemRow
-              key={adicional.id}
-              monograma={adicional.nombre.charAt(0).toUpperCase()}
-              titulo={adicional.nombre}
-              subtitulo={adicional.descripcion ?? 'Sin descripcion'}
-              precio={formatPrice(adicional.precio, moneda, locale)}
-              chip={!adicional.activo ? <EstadoAdicional adicional={adicional} /> : undefined}
-              atenuada={!adicional.activo}
-              acciones={
-                esAdmin && (
-                  <>
-                    <Button
-                      variant="secondary"
-                      className="min-h-11 px-4 py-2"
-                      onClick={() => {
-                        guardar.limpiarError();
-                        setEdicion(adicional);
-                      }}
-                    >
-                      Editar
-                    </Button>
-                    {/* Despublicar es reversible —se vuelve a ofrecer desde el
-                        formulario—, asi que no lleva dialogo de confirmacion. */}
-                    {adicional.activo && (
-                      <Button
-                        variant="secondary"
-                        className="min-h-11 px-4 py-2"
-                        disabled={despublicar.enviando}
-                        onClick={() => confirmarDespublicar(adicional)}
-                      >
-                        Despublicar
-                      </Button>
-                    )}
-                  </>
-                )
-              }
-            />
           ))}
         </div>
       )}
