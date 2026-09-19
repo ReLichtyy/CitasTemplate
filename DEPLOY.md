@@ -233,9 +233,13 @@ no puede reservar.
 - **`prisma migrate deploy` corre en cada arranque.** Es lo que hace que actualizar sea
   un push. Si prefiere migrar a mano, `EJECUTAR_MIGRACIONES=false`.
 - **La semilla también.** Es idempotente y trae, además del catálogo de estados —sin él
-  no se puede agendar nada—, servicios y personal de ejemplo. Son datos: se borran desde
-  la app. Para no sembrar, `EJECUTAR_SEED=false`, pero entonces la tabla `EstadoCita` hay
-  que llenarla por otro lado.
+  no se puede agendar nada—, servicios y personal de ejemplo. Ojo: reescribe ese catálogo
+  de ejemplo **entero** en cada arranque — si el negocio cargó sus propias fotos desde la
+  gestión, un despliegue las devuelve a las de fábrica (lo que el negocio creó de nuevo
+  sí sobrevive: la semilla no borra filas). En cuanto el catálogo real esté cargado,
+  `EJECUTAR_SEED=false` en el `.env.vps`; el catálogo de estados ya quedó sembrado en la
+  base y un despliegue nuevo con la semilla apagada es el único que necesita llenar
+  `EstadoCita` por otro lado.
 - **`TRUST_PROXY=2`** cuenta dos saltos (Traefik y el nginx del contenedor). Con un valor
   mal puesto, el límite de intentos de login cuenta todo el tráfico como si viniera de
   una sola IP.

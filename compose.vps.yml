@@ -83,6 +83,17 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-2}
       SEED_PASSWORD: ""
 
+      # --- Arranque ----------------------------------------------------------
+      # Los dos interruptores del entrypoint. La semilla corre en cada arranque y
+      # REESCRIBE el catalogo de ejemplo — incluidas las fotos que el negocio cargo
+      # desde la gestion: un despliegue los devuelve a las ilustraciones de fabrica.
+      # A false en cuanto el catalogo real esta cargado; el catalogo de estados ya
+      # quedo sembrado en la base y no lo necesita de nuevo.
+      EJECUTAR_SEED: ${EJECUTAR_SEED:-true}
+      # Migraciones en cada arranque: es lo que hace que actualizar sea un push.
+      # A false solo si se prefiere migrar a mano.
+      EJECUTAR_MIGRACIONES: ${EJECUTAR_MIGRACIONES:-true}
+
       NOTIFICACIONES_INTERVALO_MS: ${NOTIFICACIONES_INTERVALO_MS:-20000}
       NOTIFICACIONES_LOTE: ${NOTIFICACIONES_LOTE:-20}
       NOTIFICACIONES_MAX_INTENTOS: ${NOTIFICACIONES_MAX_INTENTOS:-4}
