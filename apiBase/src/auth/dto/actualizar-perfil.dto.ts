@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEmail,
   IsOptional,
   IsString,
@@ -34,4 +35,14 @@ export class ActualizarPerfilDto {
   @ValidateIf((dto: ActualizarPerfilDto) => dto.email !== '')
   @IsEmail({}, { message: 'El correo no tiene un formato valido.' })
   email?: string;
+
+  /**
+   * El opt-in de los avisos, que con sesion vive aqui y no en el cuerpo de la reserva:
+   * quien ya tiene cuenta no pasa por `resolverCliente` creando ficha, y sin este campo
+   * no habia forma de que el cliente con sesion recibiera un aviso. El timestamp del
+   * consentimiento lo pone el servicio. Ver 09-conexion-whatsapp.md.
+   */
+  @IsOptional()
+  @IsBoolean()
+  aceptaWhatsapp?: boolean;
 }

@@ -3,6 +3,7 @@ import { Alert } from '../../../components/ui/Alert';
 import { Button } from '../../../components/ui/Button';
 import { CARD_SHELL_CLASSES } from '../../../components/ui/Card';
 import { EmptyState } from '../../../components/ui/EmptyState';
+import { IconoOjoTachado } from '../../../components/ui/IconoOjoTachado';
 import { Skeleton } from '../../../components/ui/Skeleton';
 import { GestionItemRow } from '../../../components/gestion/GestionItemRow';
 import { GestionLayout } from '../../../components/gestion/GestionLayout';
@@ -120,7 +121,7 @@ export function ServiciosListPage() {
           <>
             <Button
               variant="secondary"
-              className="min-h-11 px-4 py-2"
+              className="min-h-11 px-3 py-2 text-xs sm:px-4 sm:text-sm"
               onClick={() => {
                 guardar.limpiarError();
                 setEdicion(servicio);
@@ -129,15 +130,17 @@ export function ServiciosListPage() {
               Editar
             </Button>
             {/* Despublicar es reversible —se vuelve a publicar desde el formulario—,
-                asi que no lleva dialogo de confirmacion. */}
+                asi que no lleva dialogo de confirmacion. Solo icono con `aria-label`:
+                a 360 px no caben dos botones de texto en la fila. */}
             {servicio.activo && (
               <Button
                 variant="secondary"
-                className="min-h-11 px-4 py-2"
+                aria-label="Despublicar"
+                className="size-11 px-0 py-0"
                 disabled={despublicar.enviando}
                 onClick={() => confirmarDespublicar(servicio)}
               >
-                Despublicar
+                <IconoOjoTachado />
               </Button>
             )}
           </>

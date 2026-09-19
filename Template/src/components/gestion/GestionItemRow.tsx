@@ -4,9 +4,14 @@ import { CARD_INTERACTIVE_CLASSES } from '../ui/Card';
 import { CardDetailIcon } from '../ui/CardDetailIcon';
 
 /**
- * La fila de listado de gestion: monograma crema (o foto), titulo y subtitulo al centro,
- * metricas y precio a la derecha, chevron si la fila navega, y las acciones del ADMIN al
- * costado.
+ * La fila de listado de gestion: monograma crema (o foto) a la izquierda, la informacion
+ * en columna al centro y las acciones del ADMIN a la derecha. Tres piezas en una sola
+ * linea de flexbox — en un telefono de 360 px no hay ancho para mas columnas, y lo que
+ * no es esencial (las metricas) se reserva para `sm`.
+ *
+ * El precio y la pildora de estado viven en la fila inferior de la columna central, junto
+ * al subtitulo: el titulo no compite con nadie por el ancho y el precio nunca queda
+ * empujado por los botones de accion.
  *
  * El cuerpo es un `<Link>` y las acciones van **fuera** de el: un boton dentro de un
  * enlace dispara la navegacion al pulsarlo. Las pantallas que no navegan no pasan `a`, y
@@ -32,8 +37,9 @@ export function GestionItemRow({
   /** Los profesionales son circulares; el catalogo, cuadrado. */
   redondo?: boolean;
   titulo: string;
+  /** El detalle muted de la fila: categoria y presentacion, especialidad, descripcion. */
   subtitulo?: ReactNode;
-  /** Las metricas derechas: duracion, conteo, rating. Texto corto y discreto. */
+  /** Las metricas que solo entran desde `sm`: rating, conteo. Texto corto y discreto. */
   meta?: ReactNode;
   /** El importe, ya formateado por la pantalla. Se pinta en el teal del precio. */
   precio?: ReactNode;
@@ -65,13 +71,18 @@ export function GestionItemRow({
         </span>
       )}
 
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-medium text-text-h">{titulo}</span>
-          {chip}
-        </span>
-        {subtitulo && (
-          <span className="block truncate text-sm text-text-muted">{subtitulo}</span>
+      <span className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+        <span className="truncate text-sm font-semibold text-text-h sm:text-base">{titulo}</span>
+        {/* La fila inferior junta lo que se ve de un vistazo — el importe y el estado —
+            y el subtitulo trunca a su lado: dos lineas por fila, ni una mas. */}
+        {(precio || subtitulo || chip) && (
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted sm:text-sm">
+            {precio && (
+              <span className="shrink-0 font-semibold tabular-nums text-price">{precio}</span>
+            )}
+            {subtitulo && <span className="min-w-0 truncate">{subtitulo}</span>}
+            {chip}
+          </span>
         )}
       </span>
 
@@ -80,25 +91,22 @@ export function GestionItemRow({
           {meta}
         </span>
       )}
-      {precio && (
-        <span className="shrink-0 text-sm font-semibold tabular-nums text-price">{precio}</span>
-      )}
       {a && <CardDetailIcon />}
     </>
   );
 
   return (
     <div
-      className={`${CARD_INTERACTIVE_CLASSES} flex items-center gap-4 ${atenuada ? 'opacity-70' : ''}`}
+      className={`${CARD_INTERACTIVE_CLASSES} flex items-center gap-3 sm:gap-4 ${atenuada ? 'opacity-70' : ''}`}
     >
       {a ? (
-        <Link to={a} className="flex min-w-0 flex-1 items-center gap-4 no-underline">
+        <Link to={a} className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4 no-underline">
           {cuerpo}
         </Link>
       ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-4">{cuerpo}</div>
+        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">{cuerpo}</div>
       )}
-      {acciones && <div className="flex shrink-0 flex-wrap gap-2">{acciones}</div>}
+      {acciones && <div className="flex shrink-0 gap-2">{acciones}</div>}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Alert } from '../../../components/ui/Alert';
 import { Button } from '../../../components/ui/Button';
 import { CARD_SHELL_CLASSES } from '../../../components/ui/Card';
 import { EmptyState } from '../../../components/ui/EmptyState';
+import { IconoOjoTachado } from '../../../components/ui/IconoOjoTachado';
 import { AdicionalFormModal } from '../../../components/ui/AdicionalFormModal';
 import { GestionItemRow } from '../../../components/gestion/GestionItemRow';
 import { GestionLayout } from '../../../components/gestion/GestionLayout';
@@ -146,7 +147,7 @@ export function AdicionalesListPage() {
                   <>
                     <Button
                       variant="secondary"
-                      className="min-h-11 px-4 py-2"
+                      className="min-h-11 px-3 py-2 text-xs sm:px-4 sm:text-sm"
                       onClick={() => {
                         guardar.limpiarError();
                         setEdicion(adicional);
@@ -155,15 +156,17 @@ export function AdicionalesListPage() {
                       Editar
                     </Button>
                     {/* Despublicar es reversible —se vuelve a ofrecer desde el
-                        formulario—, asi que no lleva dialogo de confirmacion. */}
+                        formulario—, asi que no lleva dialogo de confirmacion. Solo icono
+                        con `aria-label`: a 360 px no caben dos botones de texto en la fila. */}
                     {adicional.activo && (
                       <Button
                         variant="secondary"
-                        className="min-h-11 px-4 py-2"
+                        aria-label="Despublicar"
+                        className="size-11 px-0 py-0"
                         disabled={despublicar.enviando}
                         onClick={() => confirmarDespublicar(adicional)}
                       >
-                        Despublicar
+                        <IconoOjoTachado />
                       </Button>
                     )}
                   </>

@@ -146,21 +146,26 @@
 
 @keyframes marquee-right {
   from {
-    transform: translateX(-50%);
+    transform: translate3d(-50%, 0, 0);
   }
   to {
-    transform: translateX(0%);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 /* La pista trae el contenido duplicado una vez (mismo dato real, repetido para el loop) y
    recorre solo la primera mitad: en 0% ya esta en el punto donde 100% vuelve a caer, asi
-   que el salto no se nota. Se pausa en hover para quien la quiera leer. */
+   que el salto no se nota. translate3d y no translateX: es la forma que el compositor
+   movil (WebKit sobre todo) toma como capa propia, sin recomponer por frame. */
 @utility marquee-track {
   animation: marquee-right 32s linear infinite;
   will-change: transform;
-  &:hover {
-    animation-play-state: paused;
+  /* La pausa para leer es para quien tiene cursor. En pantallas tactiles el tap deja el
+     hover pegado y la pista quedaria congelada para siempre. */
+  @media (hover: hover) {
+    &:hover {
+      animation-play-state: paused;
+    }
   }
 }
 

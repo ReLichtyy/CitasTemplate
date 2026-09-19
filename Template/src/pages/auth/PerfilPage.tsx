@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { AuthShell } from '../../components/layout/AuthShell';
 import { Alert } from '../../components/ui/Alert';
 import { Button } from '../../components/ui/Button';
-import { Card } from '../../components/ui/Card';
+import { Card, CARD_SHELL_CLASSES } from '../../components/ui/Card';
 import { Field } from '../../components/ui/Field';
 import { Spinner } from '../../components/ui/Spinner';
 import { useAccionApi } from '../../hooks/useAccionApi';
@@ -25,6 +25,7 @@ function formularioDe(usuario: UsuarioActual) {
     nombre: usuario.nombre,
     apellido: usuario.apellido ?? '',
     email: usuario.email ?? '',
+    aceptaWhatsapp: usuario.aceptaWhatsapp,
   };
 }
 
@@ -64,11 +65,19 @@ export function PerfilPage() {
   const hayCambios =
     datos.nombre !== usuario.nombre ||
     datos.apellido !== (usuario.apellido ?? '') ||
-    datos.email !== (usuario.email ?? '');
+    datos.email !== (usuario.email ?? '') ||
+    datos.aceptaWhatsapp !== usuario.aceptaWhatsapp;
 
   const cambiar = (campo: keyof typeof datos) => (evento: { target: { value: string } }) => {
     setGuardado(false);
     setEditado({ ...datos, [campo]: evento.target.value });
+  };
+
+  // El checkbox trae booleano y no texto: no pasa por `cambiar`, que interpolaria el
+  // valor a cadena.
+  const cambiarWhatsapp = (marcado: boolean) => {
+    setGuardado(false);
+    setEditado({ ...datos, aceptaWhatsapp: marcado });
   };
 
   const cambiarPass =
@@ -161,6 +170,27 @@ export function PerfilPage() {
             disabled={guardarPerfil.enviando}
             onChange={cambiar('email')}
           />
+
+          {/* El opt-in de los avisos: con sesion es lo unico que el servidor mira al
+              reservar — el cuerpo de una reserva no puede dar consentimiento — asi que
+              aqui es donde el cliente con cuenta lo enciende. La casilla ocupa la fila
+              entera, como en ReservarPage: en un telefono, apuntarle a un cuadro de 16px
+              es lo que hace que se marque sin querer o no se marque. */}
+          <label
+            className={`${CARD_SHELL_CLASSES} flex cursor-pointer items-start gap-3 p-4 text-sm text-text transition-colors hover:border-accent-border has-checked:border-accent-border has-checked:bg-accent-bg sm:col-span-2`}
+          >
+            <input
+              type="checkbox"
+              checked={datos.aceptaWhatsapp}
+              disabled={guardarPerfil.enviando}
+              onChange={(evento) => cambiarWhatsapp(evento.target.checked)}
+              className="mt-0.5 size-4.5 shrink-0 accent-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border"
+            />
+            <span>
+              Quiero recibir por WhatsApp el aviso de mis citas y el enlace para
+              confirmarlas.
+            </span>
+          </label>
 
           {guardarPerfil.error && (
             <div className="sm:col-span-2">

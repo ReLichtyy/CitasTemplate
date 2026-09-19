@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ButtonLink } from '../../components/ui/ButtonLink';
 import { CARD_MEDIA_INTERACTIVE_CLASSES, CARD_SHELL_CLASSES } from '../../components/ui/Card';
 import { Eyebrow } from '../../components/ui/Eyebrow';
+import { IconoVideo } from '../../components/ui/IconoVideo';
 import { SeccionHeader } from '../../components/ui/SeccionHeader';
 import { MarcaNegocio } from '../../components/ui/MarcaNegocio';
 import { Thumbnail } from '../../components/ui/Thumbnail';
@@ -36,17 +37,6 @@ const DATOS_RAPIDOS = (terminoEmpleadoPlural: string) =>
     { etiqueta: terminoEmpleadoPlural, valor: 'Elegis con quien atenderte' },
   ] as const;
 
-// Describe el flujo real (03-autorizacion.md: se reserva sin sesion, con telefono y
-// nombre), no un generico "es facil" — cada paso es algo que la app efectivamente hace.
-const PASOS_RESERVA = [
-  { numero: '1', titulo: 'Elegi tu servicio', descripcion: 'Mira el catalogo y elegi lo que necesitas.' },
-  { numero: '2', titulo: 'Elegi fecha y hora', descripcion: 'Disponibilidad real, al instante.' },
-  { numero: '3', titulo: 'Confirma', descripcion: 'Dejas tu telefono y listo, sin crear cuenta.' },
-] as const;
-
-const MASCARA_MARQUEE =
-  'linear-gradient(to right, transparent, black 10%, black 90%, transparent)';
-
 function ServiciosMarquee() {
   const { moneda, locale } = configuracionPlaceholder;
   const { datos, cargando, error } = useRecursoApi(() => serviciosService.list());
@@ -67,16 +57,14 @@ function ServiciosMarquee() {
       {/* Visible, sin aria-hidden: solo la pista que sigue (la repeticion decorativa del
           catalogo) se le oculta al lector de pantalla, no la seccion entera. */}
       <Eyebrow className="mb-6 text-center">Nuestro catalogo</Eyebrow>
-      {/* La mascara vive en este contenedor quieto, no en la pista que se mueve: aplicar
-          mask-image sobre el mismo elemento que anima su transform hace que Safari de iOS
-          no recomponga la mascara en cada frame y la animacion se vea congelada en el
-          celular. Separado asi, ademas el fade queda fijo en los bordes de la seccion en
-          vez de viajar junto con las cards. */}
-      <div
-        aria-hidden="true"
-        style={{ maskImage: MASCARA_MARQUEE, WebkitMaskImage: MASCARA_MARQUEE }}
-      >
-        <div className="marquee-track flex w-max gap-5">
+      {/* El fade de los bordes son dos gradientes del color del fondo y no mask-image: la
+          mascara — puesta sobre el mismo elemento que anima o sobre un ancestro quieto —
+          congela la pista en los navegadores moviles (WebKit no recompone la zona
+          enmascarada frame a frame, y en tactil el hover pegado la pausaba de golpe).
+          Sobre un fondo plano el gradiente pinta exactamente lo mismo y la animacion
+          queda libre de toda dependencia con la mascara. */}
+      <div className="relative">
+        <div aria-hidden="true" className="marquee-track flex w-max gap-5">
           {pista.map((servicio, i) => {
             const tieneImagen = Boolean(servicio.imagenUrl);
             return (
@@ -120,6 +108,17 @@ function ServiciosMarquee() {
             );
           })}
         </div>
+        {/* Mismo fade de 10% que la mascara de antes, pintado encima: como el fondo de la
+            seccion es plano (--color-surface), el gradiente al color del fondo y la
+            transparencia dan el mismo borroso de borde en los dos temas. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 w-1/10 bg-linear-to-r from-surface to-transparent"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 w-1/10 bg-linear-to-l from-surface to-transparent"
+        />
       </div>
     </section>
   );
@@ -152,43 +151,79 @@ function FraseConfianza() {
   );
 }
 
-function ComoReservar() {
+/**
+ * Donde queda el negocio: a la izquierda la portada y el mapa, a la derecha el video.
+ * Todo el contenido sale de ConfiguracionNegocio — la pagina no sabe donde queda el local
+ * ni que video le puso, asi que mudarse o cambiar la portada no abre ningun `.tsx`.
+ */
+function DondeEstamos() {
+  const { nombre, portadaUrl, videoPresentacionUrl, ubicacionMapsQuery } = configuracionPlaceholder;
+
+  // El embed publico de Google Maps (output=embed) resuelve la busqueda sin API key ni
+  // costo: lo que viaja en `q` es la ubicacion que configuro el negocio, y el mapa cae
+  // en ese punto exacto, con su pin y su tarjeta de lugar.
+  const mapaSrc = `https://www.google.com/maps?q=${encodeURIComponent(ubicacionMapsQuery)}&z=16&output=embed`;
+
   return (
     <section className="border-t border-border px-4 py-14 sm:py-18">
       <SeccionHeader
-        eyebrow="Como funciona"
-        titulo="Reservar toma un minuto"
-        descripcion="Tres pasos, sin llamadas y sin formularios largos."
+        eyebrow="Visitanos"
+        titulo="Donde estamos ubicados"
+        descripcion="Mira donde quedamos y como llegar antes de reservar tu cita."
       />
 
-      {/* Cards y no columnas sueltas: el paso pasa a ser una cosa con bordes, y la linea
-          punteada entre una y otra es la que dice que van en ese orden. Sin hover: nada de
-          esto se toca, y levantar una card que no navega promete algo que no pasa. */}
-      <ol className="mx-auto mt-10 grid max-w-3xl gap-4 stagger-in sm:grid-cols-3 sm:gap-6">
-        {PASOS_RESERVA.map((paso, indice) => (
-          <li
-            key={paso.numero}
-            className={`${CARD_SHELL_CLASSES} relative flex h-full flex-col items-center gap-2 px-5 pt-9 pb-7 text-center shadow-xs shadow-black/5`}
+      <div className="mx-auto mt-10 grid max-w-5xl gap-4 stagger-in md:grid-cols-2 md:gap-6">
+        {/* Columna izquierda: la portada arriba y el mapa debajo, apiladas en su propia
+            columna para que el mapa crezca hasta el pie del video de la derecha. */}
+        <div className="flex flex-col gap-4 md:gap-6">
+          {/* Portada: la foto del local o, mientras no haya, el monograma del nombre —
+              misma caida que una card de catalogo sin foto, para que la seccion no
+              aparezca a medias. */}
+          <div
+            className={`${CARD_SHELL_CLASSES} relative aspect-video overflow-hidden shadow-xs shadow-black/5`}
           >
-            {/* El numero monta el borde superior: es lo que hace que la card se lea como
-                un paso numerado y no como una card mas del catalogo. */}
-            <span
-              className="font-mono absolute -top-5 inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-accent-border bg-accent-bg text-base font-medium text-accent-ink shadow-xs shadow-black/5"
-              aria-hidden="true"
-            >
-              {paso.numero}
-            </span>
-            {indice < PASOS_RESERVA.length - 1 && (
-              <span
-                aria-hidden="true"
-                className="absolute top-0 -right-6 hidden w-6 border-t border-dashed border-border sm:block"
-              />
-            )}
-            <p className="text-base font-semibold text-text-h">{paso.titulo}</p>
-            <p className="max-w-56 text-sm text-pretty text-text-muted">{paso.descripcion}</p>
-          </li>
-        ))}
-      </ol>
+            <Thumbnail
+              src={portadaUrl}
+              fallback={nombre.charAt(0).toUpperCase()}
+              alt={nombre}
+              className="h-full w-full text-6xl"
+            />
+          </div>
+          {/* Mapa: el iframe absoluto llena la card sin importar el alto que le deje la
+              columna; el minimo es para que en movil no quede una franja chapa. */}
+          <div className={`${CARD_SHELL_CLASSES} relative min-h-64 flex-1 overflow-hidden`}>
+            <iframe
+              title={`Ubicacion de ${nombre} en Google Maps`}
+              src={mapaSrc}
+              className="absolute inset-0"
+              loading="lazy"
+              allowFullScreen
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        </div>
+
+        {/* Columna derecha: el video del negocio, o su lugar cuando todavia no cargaron
+            uno — el contenedor existe desde ya, la seccion no cambia de forma al
+            aparecer el video. */}
+        <div className={`${CARD_SHELL_CLASSES} relative min-h-64 overflow-hidden shadow-xs shadow-black/5`}>
+          {videoPresentacionUrl ? (
+            <video
+              src={videoPresentacionUrl}
+              controls
+              preload="metadata"
+              className="absolute inset-0 size-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
+              <IconoVideo className="size-10 text-accent-ink" />
+              <p className="max-w-56 text-sm text-pretty text-text-muted">
+                Pronto: un video del lugar para que lo conozcas antes de venir.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
@@ -349,7 +384,7 @@ export function LandingPage() {
 
       <ServiciosMarquee />
       <FraseConfianza />
-      <ComoReservar />
+      <DondeEstamos />
       <TrabajosDestacados />
       <CierreCTA />
     </>

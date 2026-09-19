@@ -603,21 +603,26 @@ export function ReservarPage() {
               />
             </label>
             {/* La casilla es toda el area de la fila: en un telefono, apuntarle a un cuadro
-                de 16px es lo que hace que el opt-in se marque sin querer o no se marque. */}
-            <label
-              className={`${CARD_SHELL_CLASSES} flex cursor-pointer items-start gap-3 p-4 text-sm text-text transition-colors hover:border-accent-border has-checked:border-accent-border has-checked:bg-accent-bg sm:col-span-2`}
-            >
-              <input
-                type="checkbox"
-                checked={aceptaWhatsapp}
-                onChange={(evento) => setAceptaWhatsapp(evento.target.checked)}
-                className="mt-0.5 size-4.5 shrink-0 accent-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border"
-              />
-              <span>
-                Quiero recibir por WhatsApp el aviso de esta cita y el enlace para
-                confirmarla.
-              </span>
-            </label>
+                de 16px es lo que hace que el opt-in se marque sin querer o no se marque.
+                Solo es de invitados: con sesion el opt-in vive en la ficha del usuario y el
+                servidor ignora este campo, asi que pintarla a quien tiene cuenta es ofrecer
+                una casilla que no hace nada. */}
+            {!isAuthenticated && (
+              <label
+                className={`${CARD_SHELL_CLASSES} flex cursor-pointer items-start gap-3 p-4 text-sm text-text transition-colors hover:border-accent-border has-checked:border-accent-border has-checked:bg-accent-bg sm:col-span-2`}
+              >
+                <input
+                  type="checkbox"
+                  checked={aceptaWhatsapp}
+                  onChange={(evento) => setAceptaWhatsapp(evento.target.checked)}
+                  className="mt-0.5 size-4.5 shrink-0 accent-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-border"
+                />
+                <span>
+                  Quiero recibir por WhatsApp el aviso de esta cita y el enlace para
+                  confirmarla.
+                </span>
+              </label>
+            )}
           </div>
 
           {/* Con sesion, los campos de arriba ya vienen con la ficha puesta. Esta tarjeta
