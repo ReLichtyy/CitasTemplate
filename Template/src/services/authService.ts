@@ -25,12 +25,6 @@ export type UsuarioActual = {
   apellido: string | null;
   email: string | null;
   rol: Rol;
-  /**
-   * El opt-in de los avisos por WhatsApp. Con sesion es lo unico que el outbox mira —
-   * el cuerpo de una reserva no puede dar consentimiento — y sin este campo el perfil
-   * no tendria que mostrar. Ver 09-conexion-whatsapp.md.
-   */
-  aceptaWhatsapp: boolean;
 };
 
 /**
@@ -59,12 +53,7 @@ export type Sesion = {
 export type CambioPasswordPayload = { actual: string; nueva: string };
 
 /** Lo unico editable del perfil. El telefono es identidad: cambiarlo es soporte manual. */
-export type PerfilPayload = {
-  nombre: string;
-  apellido?: string;
-  email?: string;
-  aceptaWhatsapp?: boolean;
-};
+export type PerfilPayload = { nombre: string; apellido?: string; email?: string };
 
 export const authService = {
   login: (payload: LoginPayload) => apiClient.post<Sesion>('/auth/login', payload),

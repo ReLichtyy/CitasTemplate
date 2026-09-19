@@ -34,10 +34,6 @@ const MENSAJE_CREDENCIALES = 'Telefono o contrasena incorrectos.';
 /**
  * Lo que sale hacia el cliente. `password` no esta, y no puede colarse: es un `select`
  * explicito, no un `omit` que se olvide al agregar un campo. Ver 04-contrato-api.md.
- *
- * `aceptaWhatsapp` va porque es la ficha propia de quien firma: sin el, el perfil no
- * puede mostrar el opt-in que el outbox va a respetar. No es `USUARIO_PUBLICO`, que es
- * la proyeccion que sale en las citas ajenas.
  */
 const USUARIO_PROPIO = {
   id: true,
@@ -46,7 +42,6 @@ const USUARIO_PROPIO = {
   apellido: true,
   email: true,
   rol: true,
-  aceptaWhatsapp: true,
 } satisfies Prisma.UsuarioSelect;
 
 type UsuarioPropio = Prisma.UsuarioGetPayload<{ select: typeof USUARIO_PROPIO }>;
@@ -203,20 +198,10 @@ export class AuthService {
         where: { id: userId },
         // Campo ausente = no se toca; cadena vacia = se borra. `nombre` no acepta el
         // borrado: el DTO exige al menos un caracter.
-        //
-        // El opt-in lleva su timestamp pegado: sin fecha, el consentimiento no es
-        // demostrable (ver el comentario de `aceptaWhatsappEn` en el esquema). Apagar
-        // lo deja en NULL, igual que al crear la ficha en `resolverCliente`.
         data: {
           ...(dto.nombre !== undefined ? { nombre: dto.nombre } : {}),
           ...(dto.apellido !== undefined ? { apellido: dto.apellido || null } : {}),
           ...(dto.email !== undefined ? { email: dto.email || null } : {}),
-          ...(dto.aceptaWhatsapp !== undefined
-            ? {
-                aceptaWhatsapp: dto.aceptaWhatsapp,
-                aceptaWhatsappEn: dto.aceptaWhatsapp ? new Date() : null,
-              }
-            : {}),
         },
         select: USUARIO_PROPIO,
       });

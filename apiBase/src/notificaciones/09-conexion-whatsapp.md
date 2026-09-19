@@ -266,10 +266,13 @@ Es una escritura abierta a un invitado, como `POST /citas`. Aplica lo de
 
 Dos cosas bloquean el envío y viven en `01-modelo-datos.md`:
 
-- **`Usuario.aceptaWhatsapp Boolean` + fecha del consentimiento.** Hoy no hay dónde
-  guardarlo. Sin opt-in explícito no se manda nada: es política de WhatsApp, y es lo
-  que sostiene la reputación del número. Necesita también su casilla en
-  `ReservarPage`.
+- **`Usuario.aceptaWhatsapp Boolean` + fecha del consentimiento.** La columna existe
+  (migración `20260907082726_notificaciones`) pero **hoy no gatilla nada**: el aviso
+  de confirmación es transaccional —confirma la reserva que el cliente acaba de hacer
+  con ese número— y se manda siempre que el teléfono tenga forma internacional. La
+  línea que no se cruza es la difusión: cualquier aviso que no sea consecuencia directa
+  de una acción del propio cliente sí exigiría opt-in explícito, y para ese día ya está
+  la columna.
 - **`ConfiguracionNegocio.prefijoPais`.** El teléfono se guarda en forma local,
   de 8 dígitos y sin prefijo de país: `normalizarTelefono` le quita el `506` a lo
   que lo trae, y es `aE164` quien le antepone el prefijo al entregar el número a un
@@ -359,7 +362,7 @@ Cada paso deja algo verificable. Los tres primeros no dependen de WhatsApp y se
 prueban con `curl`.
 
 1. **Hecho · Esquema**: `NotificacionSalida`, `TokenConfirmacion`, `EventoWebhook`,
-   `Usuario.aceptaWhatsapp` (con la fecha del consentimiento) y
+   `Usuario.aceptaWhatsapp` (columna hoy sin lector; el aviso es transaccional) y
    `ConfiguracionNegocio.prefijoPais`. Migración `20260907082726_notificaciones`. La
    semilla **rellena** `prefijoPais` cuando esta en NULL en vez de reescribir la
    identidad del negocio: una fila anterior al campo dejaria el modulo sin entregar un

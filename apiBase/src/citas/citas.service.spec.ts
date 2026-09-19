@@ -120,7 +120,6 @@ function crearPrisma() {
         }) => ({
           id: 'usr-registrado',
           telefono: where.telefono,
-          aceptaWhatsapp: false,
           ...data,
         }),
       ),
@@ -612,8 +611,8 @@ describe('CitasService.reservar · outbox', () => {
 
   /**
    * El aviso viaja armado, no como un id: releer la cita desde el outbox eran cuatro
-   * consultas mas con la transaccion abierta. `aceptaWhatsapp` es el unico dato que no
-   * vuelve del INSERT, y sale de la consulta que `resolverCliente` ya hacia.
+   * consultas mas con la transaccion abierta. El telefono sale de la consulta que
+   * `resolverCliente` ya hacia: es el destino del mensaje.
    */
   it('le pasa al outbox los datos del aviso, sin releer la cita', async () => {
     const { prisma, tx } = crearPrisma();
@@ -622,7 +621,6 @@ describe('CitasService.reservar · outbox', () => {
       activo: true,
       nombre: 'Marta',
       telefono: '88880001',
-      aceptaWhatsapp: true,
     });
     const { servicio, outbox } = crearServicio(prisma);
 
@@ -632,7 +630,6 @@ describe('CitasService.reservar · outbox', () => {
     expect(aviso.cliente).toMatchObject({
       nombre: 'Marta',
       telefono: '88880001',
-      aceptaWhatsapp: true,
     });
     expect(aviso.servicio.nombre).toBe(SERVICIO.nombre);
     expect(aviso.empleado.usuario.nombre).toBe('Ana');

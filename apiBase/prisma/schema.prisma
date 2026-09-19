@@ -76,8 +76,11 @@ model Usuario {
   apellido         String?
   rol              Rol       @default(CLIENTE)
   activo           Boolean   @default(true)
-  /// Opt-in explicito para avisos por WhatsApp. Sin el no sale un solo mensaje: es
-  /// politica de WhatsApp y es lo que sostiene la reputacion del numero.
+  /// Opt-in para avisos por WhatsApp. **Hoy no lo lee nadie**: el aviso de
+  /// confirmacion es transaccional (confirma la reserva que el cliente acaba de
+  /// hacer con ese numero) y sale siempre que el telefono tenga forma
+  /// internacional. La columna queda para el dia que exista difusion, que si
+  /// exigiria consentimiento explicito.
   aceptaWhatsapp   Boolean   @default(false)
   /// Cuando se dio ese consentimiento. Sin fecha, el opt-in no es demostrable.
   aceptaWhatsappEn DateTime?

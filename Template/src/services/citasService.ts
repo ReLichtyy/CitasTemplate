@@ -25,12 +25,6 @@ export type ReservarPayload = {
   adicionalIds?: string[];
   /** Solo cuando no hay sesion; con sesion el cliente sale del token. */
   cliente?: DatosCliente;
-  /**
-   * Opt-in para el aviso por WhatsApp. Solo cuenta cuando la reserva crea la ficha:
-   * sobre un telefono que ya existe el servidor lo ignora, porque reservar con el
-   * numero de otra persona no puede darle consentimiento en su nombre.
-   */
-  aceptaWhatsapp?: boolean;
   notas?: string;
 };
 

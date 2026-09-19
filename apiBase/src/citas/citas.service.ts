@@ -53,16 +53,15 @@ const USUARIO_PUBLICO = {
 } satisfies Prisma.UsuarioSelect;
 
 /**
- * Lo que hace falta del cliente para encolar el aviso. `aceptaWhatsapp` no esta en
- * `USUARIO_PUBLICO` y no debe estarlo: eso es la proyeccion que sale al cliente HTTP.
- * Se lee aqui, en la consulta que `resolverCliente` ya hacia de todos modos.
+ * Lo que hace falta del cliente para encolar el aviso: el telefono en forma local es
+ * el destino al que el outbox antepone el prefijo de pais. Se lee aqui, en la consulta
+ * que `resolverCliente` ya hacia de todos modos.
  */
 const CLIENTE_AVISO = {
   id: true,
   nombre: true,
   apellido: true,
   telefono: true,
-  aceptaWhatsapp: true,
 } satisfies Prisma.UsuarioSelect;
 
 type ClienteAviso = Prisma.UsuarioGetPayload<{ select: typeof CLIENTE_AVISO }>;
@@ -734,10 +733,10 @@ export class CitasService {
    *
    * Un invitado cuyo telefono ya existe cuelga la cita de esa ficha y la reescribe
    * con el nombre y apellido que acaba de escribir: el aviso lleva el nombre de
-   * esta reserva, no el de una ficha vieja. El opt-in y el correo no se tocan aqui
-   * — reservar con el telefono de otra persona no puede darle consentimiento en su
-   * nombre. Lo que si se sigue impidiendo es que la respuesta revele algo de la
-   * ficha — ver `comprobanteDeInvitado`.
+   * esta reserva, no el de una ficha vieja. El correo no se toca aqui — reservar con
+   * el telefono de otra persona no puede cambiarle el correo en su nombre. Lo que si
+   * se sigue impidiendo es que la respuesta revele algo de la ficha — ver
+   * `comprobanteDeInvitado`.
    */
   private async resolverCliente(
     tx: Prisma.TransactionClient,
@@ -776,9 +775,9 @@ export class CitasService {
         );
       }
       // El nombre del aviso es el que el cliente acaba de escribir, no el de una
-      // ficha vieja. Solo se actualizan nombre y apellido; el opt-in y el correo
-      // no se tocan: reservar con el telefono de otra persona no puede darle
-      // consentimiento ni cambiarle el correo en su nombre.
+      // ficha vieja. Solo se actualizan nombre y apellido; el correo no se toca:
+      // reservar con el telefono de otra persona no puede cambiarle el correo en
+      // su nombre.
       return tx.usuario.update({
         where: { telefono },
         data: {
@@ -791,17 +790,12 @@ export class CitasService {
 
     // Ficha sin contrasena: existe para colgar la cita de un telefono, no para
     // iniciar sesion. Ver el comentario de `Usuario.password` en el esquema.
-    // El opt-in solo se fija al **crear** la ficha. Sobre una ficha que ya existe no
-    // se toca: reservar con el telefono de otra persona no puede darle consentimiento
-    // en su nombre. Quien ya tiene cuenta lo cambia desde su perfil.
     const creado = await tx.usuario.create({
       data: {
         telefono,
         nombre: dto.cliente.nombre.trim(),
         apellido: dto.cliente.apellido?.trim(),
         email: dto.cliente.email?.trim(),
-        aceptaWhatsapp: dto.aceptaWhatsapp === true,
-        aceptaWhatsappEn: dto.aceptaWhatsapp === true ? new Date() : null,
       },
       select: CLIENTE_AVISO,
     });

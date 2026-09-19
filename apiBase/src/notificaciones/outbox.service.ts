@@ -20,7 +20,7 @@ import { NotificacionesWorker } from './notificaciones.worker.js';
 export interface DatosAviso {
   id: string;
   inicio: Date;
-  cliente: { nombre: string; apellido: string | null; telefono: string; aceptaWhatsapp: boolean };
+  cliente: { nombre: string; apellido: string | null; telefono: string };
   servicio: { nombre: string };
   empleado: { usuario: { nombre: string; apellido: string | null } };
 }
@@ -65,20 +65,20 @@ export class OutboxService {
   /**
    * Encola la confirmacion de una cita recien reservada.
    *
-   * Devuelve `false` cuando no hay nada que mandar —sin opt-in, o sin telefono en
-   * forma internacional— y eso no es un error: la reserva sigue siendo valida.
+   * El aviso es transaccional: confirma la reserva que el cliente acaba de hacer con
+   * ese numero, asi que se manda siempre que el telefono tenga forma internacional —
+   * no hay casilla de opt-in. La linea que no se cruza es la difusion: cualquier aviso
+   * que no sea consecuencia directa de una accion del propio cliente si exigiria
+   * consentimiento explicito.
+   *
+   * Devuelve `false` cuando no hay nada que mandar —sin telefono en forma
+   * internacional— y eso no es un error: la reserva sigue siendo valida.
    */
   async encolarConfirmacion(
     tx: Prisma.TransactionClient,
     cita: DatosAviso,
   ): Promise<boolean> {
     const citaId = cita.id;
-
-    // Sin opt-in explicito no sale un solo mensaje: es politica de WhatsApp, y es lo
-    // que sostiene la reputacion del numero.
-    if (!cita.cliente.aceptaWhatsapp) {
-      return false;
-    }
 
     // Cacheada: es la fila de configuracion, y esta llamada ocurre dentro de la
     // transaccion de la reserva. Ver catalogo.service.ts.
